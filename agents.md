@@ -91,7 +91,18 @@ desktop application. Its automated acceptance coverage is in
 seed output, variation coverage, CPU backend reporting, renderer cancellation
 and failure handling, queue bounds, finite-session completion, rating-folder
 image-only behavior, undo/re-rating, and source-archive preservation. Phase 2
-AI scoring remains intentionally unimplemented.
+AI scoring is implemented separately after the Phase 1 manual workflow; see the Phase 2 implementation note below.
+
+## Phase 2 implementation note
+
+Phase 2 is implemented as an optional CUDA-only DINOv2 preference scorer in
+`src/FractalFlameCurator/Ai` and `src/FractalFlameCurator/Pipeline`. The WPF
+application keeps the Phase 1 manual workflow as the source of truth. The
+bundled Python worker uses a frozen DINOv2 ViT-B/14 backbone and a small four-
+threshold ordinal head; it refuses CPU inference/training and reports the
+Python/PyTorch/CUDA/device state. Human rating folders are snapshotted but never
+modified by AI. Phase 2 automated coverage is in
+`tests/FractalFlameCurator.Tests/PhaseTwoTests.cs`.
 
 ## Product constraints
 

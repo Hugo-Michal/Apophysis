@@ -1,0 +1,62 @@
+using FractalFlameCurator.Models;
+using FractalFlameCurator.Storage;
+
+namespace FractalFlameCurator.Pipeline;
+
+public sealed class CandidateCatalog
+{
+    private readonly Dictionary<string, (RenderedArtifact Artifact, PreferenceScore? Score)> _candidates = new(StringComparer.OrdinalIgnoreCase);
+
+    public void Refresh(SourceArchive archive, RatingStore ratings)
+    {
+        var current = archive.EnumerateArtifacts()
+            .Where(artifact => ratings.FindRating(artifact.ImagePath) is null)
+            .ToDictionary(artifact => artifact.SourceId, StringComparer.OrdinalIgnoreCase);
+        foreach (var sourceId in _candidates.Keys.Except(current.Keys, StringComparer.OrdinalIgnoreCase).ToArray()) _candidates.Remove(sourceId);
+        foreach (var artifact in current.Values)
+        {
+            var existing = _candidates.GetValueOrDefault(artifact.SourceId);
+            var parsedScore = CandidateFileNaming.TryParseScore(artifact.BaseName, out var score)
+                ? new PreferenceScore(artifact.ImagePath, artifact.SourceId, score, 1 + score * 4, "filename")
+                : existing.Score;
+            _candidates[artifact.SourceId] = (artifact, parsedScore);
+        }
+    }
+
+    public void RecordScore(PreferenceScore score)
+    {
+        var sourceId = score.SourceId;
+        if (_candidates.TryGetValue(sourceId, out var candidate))
+        {
+            var artifact = candidate.Artifact with
+            {
+                BaseName = Path.GetFileNameWithoutExtension(score.ImagePath),
+                ImagePath = score.ImagePath
+            };
+            _candidates[sourceId] = (artifact, score);
+        }
+    }
+
+    public PreferenceScore? GetScore(RenderedArtifact artifact) => _candidates.TryGetValue(artifact.SourceId, out var value) ? value.Score : null;
+
+    public IReadOnlyList<RenderedArtifact> Ordered(bool aiEnabled)
+    {
+        var values = _candidates.Values;
+        return (aiEnabled
+            ? values.OrderByDescending(value => value.Score is not null).ThenByDescending(value => value.Score?.Score ?? -1).ThenBy(value => value.Artifact.SourceId, StringComparer.OrdinalIgnoreCase)
+            : values.OrderBy(value => value.Artifact.SourceId, StringComparer.OrdinalIgnoreCase))
+            .Select(value => value.Artifact)
+            .ToArray();
+    }
+
+    public RenderedArtifact? Best(bool aiEnabled) => Ordered(aiEnabled).FirstOrDefault();
+
+    public RenderedArtifact? Adjacent(string sourceId, int direction, bool aiEnabled)
+    {
+        var ordered = Ordered(aiEnabled);
+        var index = Array.FindIndex(ordered.ToArray(), artifact => string.Equals(artifact.SourceId, sourceId, StringComparison.OrdinalIgnoreCase));
+        if (index < 0) return ordered.FirstOrDefault();
+        var next = index + Math.Sign(direction);
+        return next >= 0 && next < ordered.Count ? ordered[next] : null;
+    }
+}

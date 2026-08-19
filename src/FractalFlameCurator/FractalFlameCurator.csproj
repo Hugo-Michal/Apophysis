@@ -10,5 +10,7 @@
     <AssemblyName>FractalFlameCurator</AssemblyName>
     <RootNamespace>FractalFlameCurator</RootNamespace>
   </PropertyGroup>
+  <ItemGroup>
+    <Content Include="Ai\dinov2_service.py" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+  </ItemGroup>
 </Project>
-

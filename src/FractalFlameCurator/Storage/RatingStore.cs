@@ -1,3 +1,5 @@
+using FractalFlameCurator.Models;
+
 namespace FractalFlameCurator.Storage;
 
 public sealed record RatingAction(string ImagePath, int NewRating, int? PreviousRating);
@@ -24,7 +26,9 @@ public sealed class RatingStore
         var previous = FindRating(sourceImagePath);
         var action = new RatingAction(sourceImagePath, rating, previous);
         RemoveAllRatingCopies(sourceImagePath);
-        File.Copy(sourceImagePath, Path.Combine(GetRatingDirectory(rating), Path.GetFileName(sourceImagePath)), true);
+        // Rating folders are human labels. Keep their names stable and free of the
+        // transient AI score prefix while the rendered/source archive remains intact.
+        File.Copy(sourceImagePath, Path.Combine(GetRatingDirectory(rating), CandidateFileNaming.RemoveScorePrefix(Path.GetFileName(sourceImagePath))), true);
         _history.Push(action);
         return action;
     }
@@ -43,10 +47,11 @@ public sealed class RatingStore
 
     public int? FindRating(string sourceImagePath)
     {
-        var fileName = Path.GetFileName(sourceImagePath);
+        var stableFileName = CandidateFileNaming.RemoveScorePrefix(Path.GetFileName(sourceImagePath));
         for (var rating = 1; rating <= 5; rating++)
         {
-            if (File.Exists(Path.Combine(GetRatingDirectory(rating), fileName))) return rating;
+            if (Directory.EnumerateFiles(GetRatingDirectory(rating), "*.png", SearchOption.TopDirectoryOnly)
+                .Any(path => string.Equals(CandidateFileNaming.RemoveScorePrefix(Path.GetFileName(path)), stableFileName, StringComparison.OrdinalIgnoreCase))) return rating;
         }
         return null;
     }
@@ -59,12 +64,14 @@ public sealed class RatingStore
 
     private void RemoveAllRatingCopies(string sourceImagePath)
     {
-        var fileName = Path.GetFileName(sourceImagePath);
+        var stableFileName = CandidateFileNaming.RemoveScorePrefix(Path.GetFileName(sourceImagePath));
         for (var rating = 1; rating <= 5; rating++)
         {
-            var path = Path.Combine(GetRatingDirectory(rating), fileName);
-            if (File.Exists(path)) File.Delete(path);
+            foreach (var path in Directory.EnumerateFiles(GetRatingDirectory(rating), "*.png", SearchOption.TopDirectoryOnly)
+                .Where(path => string.Equals(CandidateFileNaming.RemoveScorePrefix(Path.GetFileName(path)), stableFileName, StringComparison.OrdinalIgnoreCase)))
+            {
+                File.Delete(path);
+            }
         }
     }
 }
-

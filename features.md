@@ -14,6 +14,16 @@ Every agent must add the newest entry at the top whenever behavior changes.
 
 ## Current features
 
+### 2026-08-19 - CUDA runtime verification and Python version pin
+- Change: Pin the Windows Python launcher used by the DINOv2 worker to Python 3.12, which is supported by the selected PyTorch Windows runtime, and verified PyTorch 2.5.1+cu118 plus DINOv2 ViT-B/14 on `cuda:0` with the installed GTX 1060 6GB.
+- Files: `src/FractalFlameCurator/Ai/PreferenceScoringBackend.cs`.
+- Notes: The app now uses the installed CUDA-capable runtime rather than the machine’s default Python 3.13 interpreter.
+
+### 2026-08-19 - Optional DINOv2 preference scorer
+- Change: Added an optional CUDA-only PyTorch DINOv2 ViT-B/14 preference scorer with a frozen backbone, four-threshold ordinal head, expected-rating/0–1 score conversion, stable fixed-width score prefixes, model replacement, candidate rescoring, and independent background scoring controls.
+- Files: `src/FractalFlameCurator/Ai`, `src/FractalFlameCurator/Models/PreferenceScoringModels.cs`, `src/FractalFlameCurator/Pipeline/ContinuousAiScoringService.cs`, `src/FractalFlameCurator/Pipeline/CandidateCatalog.cs`, `src/FractalFlameCurator/Storage`, `src/FractalFlameCurator/MainWindow.xaml`, `src/FractalFlameCurator/MainWindow.xaml.cs`, `tests/FractalFlameCurator.Tests/PhaseTwoTests.cs`.
+- Notes: Human rating folders remain the source of truth and are never changed by AI. Training is available for small or empty corpora with explicit unreliable-metrics warnings. CUDA, GPU, PyTorch version, active device, model status, dataset readiness bars, validation metrics, and evaluation-only controls are reported. The bundled Python worker refuses CPU AI execution; manual rendering/rating remain operational when Python/PyTorch/CUDA is unavailable.
+
 ### 2026-08-19 - Default quality and undo navigation correction
 - Change: Set the default sample budget to 20,000,000 points and fixed Undo navigation so the image that was current before Undo is retained and shown after the undone image is rated or skipped.
 - Files: `src/FractalFlameCurator/Models/FlameGenome.cs`, `src/FractalFlameCurator/MainWindow.xaml.cs`, `src/FractalFlameCurator/Generation/FlameGenerator.cs`, `src/FractalFlameCurator/Serialization/FlameXmlSerializer.cs`.
