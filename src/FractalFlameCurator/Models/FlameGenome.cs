@@ -14,7 +14,7 @@ public sealed class FlameGenome
     public double Rotate { get; set; }
     public int Oversample { get; set; } = 1;
     public double FilterRadius { get; set; } = 0.5;
-    public int Quality { get; set; } = 250_000;
+    public int Quality { get; set; } = 5_000_000;
     public double Brightness { get; set; } = 1;
     public double Gamma { get; set; } = 2.2;
     public double GammaThreshold { get; set; } = 0.01;
@@ -171,7 +171,7 @@ public sealed record RenderSettings
 {
     public int Width { get; init; } = 2048;
     public int Height { get; init; } = 2048;
-    public int SampleBudget { get; init; } = 250_000;
+    public int SampleBudget { get; init; } = 5_000_000;
     public int Oversample { get; init; } = 1;
     public double FilterRadius { get; init; } = 0.5;
     public double Brightness { get; init; } = 1;

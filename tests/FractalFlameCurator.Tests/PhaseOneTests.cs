@@ -78,6 +78,16 @@ public sealed class PhaseOneTests
     }
 
     [Fact]
+    public async Task RendererUsesTheConfiguredSampleBudget()
+    {
+        var progress = new RecordingProgress();
+        var genome = new FlameGenerator().Generate(123);
+        await new CpuFlameRenderer().RenderAsync(genome, new RenderSettings { Width = 64, Height = 64, SampleBudget = 12_345 }, progress, CancellationToken.None);
+        Assert.Equal(12_345, progress.Last.CompletedSamples);
+        Assert.Equal(12_345, progress.Last.TotalSamples);
+    }
+
+    [Fact]
     public void BackendReportingDoesNotClaimGpu()
     {
         var status = new CpuFlameRenderer().Status;
@@ -173,5 +183,11 @@ public sealed class PhaseOneTests
     {
         public RendererStatus Status { get; } = new("CPU", "Test CPU", false, "Test renderer");
         public Task<RenderedFrame> RenderAsync(FlameGenome genome, RenderSettings settings, IProgress<RenderProgress>? progress, CancellationToken cancellationToken) => Task.FromResult(new RenderedFrame(32, 32, new byte[32 * 32 * 4]));
+    }
+
+    private sealed class RecordingProgress : IProgress<RenderProgress>
+    {
+        public RenderProgress Last { get; private set; } = new(0, 0);
+        public void Report(RenderProgress value) => Last = value;
     }
 }

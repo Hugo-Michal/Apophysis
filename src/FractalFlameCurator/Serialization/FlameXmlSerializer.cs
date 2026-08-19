@@ -84,7 +84,7 @@ public static class FlameXmlSerializer
             Symmetry = (int)Double(flame, "symmetry", 0),
             Oversample = (int)Double(flame, "oversample", 1),
             FilterRadius = Double(flame, "filter", 0.5),
-            Quality = (int)Double(flame, "quality", 250_000),
+            Quality = (int)Double(flame, "quality", 5_000_000),
             Brightness = Double(flame, "brightness", 1),
             Gamma = Double(flame, "gamma", 2.2),
             GammaThreshold = Double(flame, "gamma_threshold", 0.01),

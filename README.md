@@ -47,6 +47,7 @@ No flam3 or Apophysis executable is assumed to be installed. The selected
 renderer is therefore the bundled managed CPU renderer. Its `oversample`
 setting renders at an integer multiple of the requested dimensions and applies
 the configured filter radius while reducing to the final 2048x2048 image. The
-sample budget controls the number of histogram samples; gamma, brightness, and
+sample budget controls the number of histogram samples; the default is 5 million
+and the UI permits up to 500 million for long CPU renders. Gamma, brightness, and
 vibrancy affect the tone map. The GUI displays this backend and does not label
 the CPU fallback as GPU acceleration.

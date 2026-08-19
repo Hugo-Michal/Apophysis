@@ -43,7 +43,7 @@ public partial class MainWindow : Window
         BatchLimitTextBox.Text = "100";
         WorkersTextBox.Text = Math.Max(1, Math.Min(4, Environment.ProcessorCount)).ToString(CultureInfo.InvariantCulture);
         QueueCapacityTextBox.Text = "4";
-        SampleBudgetTextBox.Text = "250000";
+        SampleBudgetTextBox.Text = "5000000";
         OversampleComboBox.SelectedIndex = 0;
         FilterRadiusTextBox.Text = "0.5";
         GammaTextBox.Text = "2.2";
@@ -73,7 +73,7 @@ public partial class MainWindow : Window
                 {
                     Width = 2048,
                     Height = 2048,
-                    SampleBudget = ParseInt(SampleBudgetTextBox, 250_000, 100, 20_000_000),
+                    SampleBudget = ParseInt(SampleBudgetTextBox, 5_000_000, 100, 500_000_000),
                     Oversample = ParseInt((OversampleComboBox.SelectedItem as ComboBoxItem)?.Content?.ToString(), 1, 1, 3),
                     FilterRadius = ParseDouble(FilterRadiusTextBox, 0.5, 0, 3),
                     Gamma = ParseDouble(GammaTextBox, 2.2, 0.1, 8),
@@ -244,7 +244,8 @@ public partial class MainWindow : Window
     {
         var status = _renderService.Status;
         QueueTextBlock.Text = $"Queue: {status.QueueDepth}/{_sessionOptions?.QueueCapacity ?? 0} · ready {status.ReadyCount}\nCompleted: {status.Completed} · failures: {status.Failed}";
-        SessionTextBlock.Text = status.IsRunning ? $"Session: {(status.IsPaused ? "PAUSED" : "RUNNING")} · {status.Elapsed:hh\\:mm\\:ss} · limit {status.BatchLimit}" : "Session: idle";
+        var sampleProgress = status.ActiveSampleBudget > 0 ? $" · samples {status.ActiveSamples:N0}/{status.ActiveSampleBudget:N0}" : string.Empty;
+        SessionTextBlock.Text = status.IsRunning ? $"Session: {(status.IsPaused ? "PAUSED" : "RUNNING")} · {status.Elapsed:hh\\:mm\\:ss} · limit {status.BatchLimit}{sampleProgress}" : "Session: idle";
         RatingCountTextBlock.Text = _ratingStore is null ? "Rated: 0" : $"Rated: {_ratingStore.RatedImageCount()} · folders image-only: {_ratingStore.RatingFoldersContainImagesOnly()}";
     }
 

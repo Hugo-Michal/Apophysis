@@ -14,6 +14,11 @@ Every agent must add the newest entry at the top whenever behavior changes.
 
 ## Current features
 
+### 2026-08-19 - Higher sample-budget quality control
+- Change: Raised the practical default sample budget to 5,000,000 points, allowed explicit budgets up to 500,000,000, displayed live sample progress, and stored the selected quality/tone settings in each source `.flame` file.
+- Files: `src/FractalFlameCurator/Models/FlameGenome.cs`, `src/FractalFlameCurator/Pipeline/ContinuousRenderService.cs`, `src/FractalFlameCurator/MainWindow.xaml.cs`, `tests/FractalFlameCurator.Tests/PhaseOneTests.cs`.
+- Notes: 500,000,000 points is intentionally a long-running CPU render; the UI no longer silently reduces that value to 20,000,000.
+
 ### 2026-08-19 - Viewport-fit and pointer zoom
 - Change: The preview now fits each square render to the available viewport, refits when the viewport changes, and supports mouse-wheel zoom anchored to the pointer location. Actual size and Zoom to fit remain available.
 - Files: `src/FractalFlameCurator/MainWindow.xaml`, `src/FractalFlameCurator/MainWindow.xaml.cs`.

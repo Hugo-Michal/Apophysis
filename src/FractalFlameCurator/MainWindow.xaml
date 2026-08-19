@@ -44,7 +44,7 @@
           <Separator Margin="0,2,0,10" />
           <TextBlock Text="Render quality" FontSize="15" FontWeight="SemiBold" />
           <TextBlock Text="Built-in CPU renderer · output is always 2048×2048 by default" Foreground="{StaticResource MutedTextBrush}" TextWrapping="Wrap" Margin="0,2,0,5" />
-          <Label Content="Sample budget" />
+          <Label Content="Sample budget (points)" />
           <TextBox x:Name="SampleBudgetTextBox" />
           <Grid>
             <Grid.ColumnDefinitions><ColumnDefinition /><ColumnDefinition Width="10" /><ColumnDefinition /></Grid.ColumnDefinitions>
