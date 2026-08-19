@@ -1,0 +1,8 @@
+.tooling/
+**/bin/
+**/obj/
+rendered/
+ratings/
+*.user
+*.suo
+

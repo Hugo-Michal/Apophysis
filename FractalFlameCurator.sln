@@ -1,0 +1,25 @@
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.11.35327.1
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "FractalFlameCurator", "src\FractalFlameCurator\FractalFlameCurator.csproj", "{7B4BFB7A-6ACD-4B75-A3DA-8A9699D77C1D}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "FractalFlameCurator.Tests", "tests\FractalFlameCurator.Tests\FractalFlameCurator.Tests.csproj", "{5BDA5FEF-CE44-49FA-A8C7-916E604A9D2E}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{7B4BFB7A-6ACD-4B75-A3DA-8A9699D77C1D}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{7B4BFB7A-6ACD-4B75-A3DA-8A9699D77C1D}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{7B4BFB7A-6ACD-4B75-A3DA-8A9699D77C1D}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{7B4BFB7A-6ACD-4B75-A3DA-8A9699D77C1D}.Release|Any CPU.Build.0 = Release|Any CPU
+		{5BDA5FEF-CE44-49FA-A8C7-916E604A9D2E}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{5BDA5FEF-CE44-49FA-A8C7-916E604A9D2E}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{5BDA5FEF-CE44-49FA-A8C7-916E604A9D2E}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{5BDA5FEF-CE44-49FA-A8C7-916E604A9D2E}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+EndGlobal
+
