@@ -14,8 +14,13 @@ Every agent must add the newest entry at the top whenever behavior changes.
 
 ## Current features
 
+### 2026-08-19 - Default quality and undo navigation correction
+- Change: Set the default sample budget to 20,000,000 points and fixed Undo navigation so the image that was current before Undo is retained and shown after the undone image is rated or skipped.
+- Files: `src/FractalFlameCurator/Models/FlameGenome.cs`, `src/FractalFlameCurator/MainWindow.xaml.cs`, `src/FractalFlameCurator/Generation/FlameGenerator.cs`, `src/FractalFlameCurator/Serialization/FlameXmlSerializer.cs`.
+- Notes: The explicit maximum remains 500,000,000 points.
+
 ### 2026-08-19 - Higher sample-budget quality control
-- Change: Raised the practical default sample budget to 5,000,000 points, allowed explicit budgets up to 500,000,000, displayed live sample progress, and stored the selected quality/tone settings in each source `.flame` file.
+- Change: Raised the practical default sample budget to 20,000,000 points, allowed explicit budgets up to 500,000,000, displayed live sample progress, and stored the selected quality/tone settings in each source `.flame` file.
 - Files: `src/FractalFlameCurator/Models/FlameGenome.cs`, `src/FractalFlameCurator/Pipeline/ContinuousRenderService.cs`, `src/FractalFlameCurator/MainWindow.xaml.cs`, `tests/FractalFlameCurator.Tests/PhaseOneTests.cs`.
 - Notes: 500,000,000 points is intentionally a long-running CPU render; the UI no longer silently reduces that value to 20,000,000.
 

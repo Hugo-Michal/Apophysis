@@ -27,7 +27,7 @@ public sealed class FlameGenerator
             Rotate = random.NextSigned(30),
             Oversample = 1,
             FilterRadius = 0.35 + random.NextDouble() * 0.85,
-            Quality = 5_000_000,
+            Quality = 20_000_000,
             Brightness = 0.85 + random.NextDouble() * 0.5,
             Gamma = 1.7 + random.NextDouble() * 1.0,
             Vibrancy = 0.8 + random.NextDouble() * 0.2,

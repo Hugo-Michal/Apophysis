@@ -44,6 +44,7 @@ public sealed class PhaseOneTests
     {
         var genome = new FlameGenerator().Generate(314159);
         var settings = new RenderSettings { SampleBudget = 1_000 };
+        Assert.Equal(20_000_000, new RenderSettings().SampleBudget);
         var frame = await new CpuFlameRenderer().RenderAsync(genome, settings, null, CancellationToken.None);
         Assert.Equal(2048, frame.Width);
         Assert.Equal(2048, frame.Height);

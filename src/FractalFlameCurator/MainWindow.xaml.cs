@@ -25,6 +25,7 @@ public partial class MainWindow : Window
     private RatingStore? _ratingStore;
     private RenderedArtifact? _current;
     private RenderedArtifact? _lastRated;
+    private RenderedArtifact? _deferredAfterUndo;
     private double _zoomScale = 1;
     private int _imagePixelWidth;
     private int _imagePixelHeight;
@@ -43,7 +44,7 @@ public partial class MainWindow : Window
         BatchLimitTextBox.Text = "100";
         WorkersTextBox.Text = Math.Max(1, Math.Min(4, Environment.ProcessorCount)).ToString(CultureInfo.InvariantCulture);
         QueueCapacityTextBox.Text = "4";
-        SampleBudgetTextBox.Text = "5000000";
+        SampleBudgetTextBox.Text = "20000000";
         OversampleComboBox.SelectedIndex = 0;
         FilterRadiusTextBox.Text = "0.5";
         GammaTextBox.Text = "2.2";
@@ -73,7 +74,7 @@ public partial class MainWindow : Window
                 {
                     Width = 2048,
                     Height = 2048,
-                    SampleBudget = ParseInt(SampleBudgetTextBox, 5_000_000, 100, 500_000_000),
+                    SampleBudget = ParseInt(SampleBudgetTextBox, 20_000_000, 100, 500_000_000),
                     Oversample = ParseInt((OversampleComboBox.SelectedItem as ComboBoxItem)?.Content?.ToString(), 1, 1, 3),
                     FilterRadius = ParseDouble(FilterRadiusTextBox, 0.5, 0, 3),
                     Gamma = ParseDouble(GammaTextBox, 2.2, 0.1, 8),
@@ -131,7 +132,12 @@ public partial class MainWindow : Window
 
     private void ShowNextReady()
     {
-        if (_renderService.TryDequeueReady(out var next)) ShowArtifact(next);
+        if (_deferredAfterUndo is { } deferred)
+        {
+            _deferredAfterUndo = null;
+            ShowArtifact(deferred);
+        }
+        else if (_renderService.TryDequeueReady(out var next)) ShowArtifact(next);
         else
         {
             _current = null;
@@ -157,7 +163,8 @@ public partial class MainWindow : Window
 
     private void Undo_Click(object sender, RoutedEventArgs e)
     {
-        if (_ratingStore?.Undo() != true || _lastRated is null) return;
+        if (_lastRated is null || _ratingStore?.Undo() != true) return;
+        _deferredAfterUndo = _current;
         ShowArtifact(_lastRated);
         _lastRated = null;
     }
