@@ -14,6 +14,16 @@ Every agent must add the newest entry at the top whenever behavior changes.
 
 ## Current features
 
+### 2026-08-20 - Paired PNG and FLAME candidate storage
+- Change: Rating now moves the rendered PNG and matching `.flame` together, AI rescoring renames both files with the same fixed-width score prefix, and undo/re-rating operate on complete pairs.
+- Files: `src/FractalFlameCurator/Storage/SourceArchive.cs`, `src/FractalFlameCurator/Storage/RatingStore.cs`, `src/FractalFlameCurator/Pipeline/ContinuousAiScoringService.cs`, `src/FractalFlameCurator/MainWindow.xaml.cs`, `tests/FractalFlameCurator.Tests`.
+- Notes: Rating folders now contain only matched PNG/`.flame` pairs. Existing workspace files were repaired separately; unmatched orphan `.flame` files were removed after the audit.
+
+### 2026-08-19 - Render-session source ID collision fix
+- Change: Added a unique render-session suffix to generated source IDs and made candidate catalog refresh tolerate duplicate legacy IDs without crashing.
+- Files: `src/FractalFlameCurator/Storage/SourceArchive.cs`, `src/FractalFlameCurator/Pipeline/ContinuousRenderService.cs`, `src/FractalFlameCurator/Pipeline/CandidateCatalog.cs`, `tests/FractalFlameCurator.Tests/PhaseTwoTests.cs`.
+- Notes: Existing rendered files are not deleted or renamed by this fix. When a legacy duplicate is encountered, the newest complete image is selected deterministically.
+
 ### 2026-08-19 - CUDA runtime verification and Python version pin
 - Change: Pin the Windows Python launcher used by the DINOv2 worker to Python 3.12, which is supported by the selected PyTorch Windows runtime, and verified PyTorch 2.5.1+cu118 plus DINOv2 ViT-B/14 on `cuda:0` with the installed GTX 1060 6GB.
 - Files: `src/FractalFlameCurator/Ai/PreferenceScoringBackend.cs`.

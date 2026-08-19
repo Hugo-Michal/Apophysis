@@ -18,8 +18,8 @@ dotnet run --project .\src\FractalFlameCurator\FractalFlameCurator.csproj
 
 The application writes `rendered/` and `ratings/1` through `ratings/5` below
 the selected output directory. Each source genome and its rendered PNG share a
-stable basename. Rating folders contain copied PNG files only; the source
-archive is never removed by rating or undo.
+stable basename. Rating moves keep each PNG and its matching `.flame` together
+under the stable, score-free basename; undo moves the pair back when needed.
 
 ## Architecture
 
@@ -42,8 +42,8 @@ archive is never removed by rating or undo.
   the bundled PyTorch worker, and trains a four-threshold ordinal preference
   head. AI is CUDA-only and reports truthful Python/PyTorch/CUDA/device
   diagnostics; manual rendering and rating remain available without it.
-- `Storage` keeps source PNG/`.flame` pairs separate from image-only rating
-  folders and implements safe re-rating plus one-step undo.
+- `Storage` treats PNG/`.flame` files as one candidate pair, moves the pair into
+  the selected rating folder, and implements safe re-rating plus one-step undo.
 - `MainWindow.xaml` is the WPF manual-curation shell. Quality controls are
   visible and truthful: sample budget, actual oversample, filter radius, gamma,
   brightness, vibrancy, and palette. The preview fits the viewport by default;

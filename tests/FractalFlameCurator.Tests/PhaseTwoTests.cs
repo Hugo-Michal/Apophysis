@@ -101,11 +101,13 @@ public sealed class PhaseTwoTests
             service.Start(root, ratings);
             await WaitUntil(() => service.Status.Completed >= 1);
             Assert.True(File.Exists(Path.Combine(root, "rendered", "012000__" + first.SourceId + ".png")));
-            Assert.True(File.Exists(first.FlamePath));
+            Assert.True(File.Exists(Path.Combine(root, "rendered", "012000__" + first.SourceId + ".flame")));
+            Assert.False(File.Exists(first.FlamePath));
             Assert.Single(service.Scores);
             var second = archive.Save(new Generation.FlameGenerator().Generate(2), BlankFrame(), 2);
             await WaitUntil(() => service.Status.Completed >= 2);
             Assert.True(File.Exists(Path.Combine(root, "rendered", "012000__" + second.SourceId + ".png")));
+            Assert.True(File.Exists(Path.Combine(root, "rendered", "012000__" + second.SourceId + ".flame")));
             Assert.Equal(2, Directory.EnumerateFiles(Path.Combine(root, "rendered"), "*.png").Count());
         }
         finally { Directory.Delete(root, true); }
@@ -128,8 +130,10 @@ public sealed class PhaseTwoTests
             service.Start(root, ratings);
             await WaitUntil(() => service.Status.Completed >= 1);
             Assert.Equal(before, Directory.EnumerateFiles(Path.Combine(root, "ratings", "4"), "*.png").Select(Path.GetFileName).ToArray());
-            Assert.True(File.Exists(rated.ImagePath));
+            Assert.True(File.Exists(Path.Combine(root, "ratings", "4", rated.SourceId + ".png")));
+            Assert.True(File.Exists(Path.Combine(root, "ratings", "4", rated.SourceId + ".flame")));
             Assert.True(File.Exists(Path.Combine(root, "rendered", "088000__" + candidate.SourceId + ".png")));
+            Assert.True(File.Exists(Path.Combine(root, "rendered", "088000__" + candidate.SourceId + ".flame")));
         }
         finally { Directory.Delete(root, true); }
     }
@@ -152,6 +156,7 @@ public sealed class PhaseTwoTests
             var result = await service.TrainAsync(snapshot, Path.Combine(root, "models"));
             Assert.Equal("model-two", result.ModelVersion);
             Assert.True(File.Exists(Path.Combine(root, "rendered", "091000__" + candidate.SourceId + ".png")));
+            Assert.True(File.Exists(Path.Combine(root, "rendered", "091000__" + candidate.SourceId + ".flame")));
             Assert.Equal("model-two", service.Scores[candidate.SourceId].ModelVersion);
         }
         finally { Directory.Delete(root, true); }
@@ -168,6 +173,26 @@ public sealed class PhaseTwoTests
             Assert.True(SourceArchive.IsCompleteCandidate(artifact.ImagePath));
             Assert.Single(archive.EnumerateArtifacts());
             Assert.Empty(Directory.EnumerateFiles(root, "*.tmp", SearchOption.AllDirectories));
+        }
+        finally { Directory.Delete(root, true); }
+    }
+
+    [Fact]
+    public void CandidateCatalogToleratesLegacyDuplicateSourceIds()
+    {
+        var root = NewTempDirectory();
+        try
+        {
+            var archive = new SourceArchive(root);
+            var artifact = archive.Save(new Generation.FlameGenerator().Generate(9), BlankFrame(), 1);
+            var duplicatePath = Path.Combine(root, "rendered", "012000__" + artifact.SourceId + ".png");
+            File.Copy(artifact.ImagePath, duplicatePath);
+
+            var catalog = new CandidateCatalog();
+            catalog.Refresh(archive, new RatingStore(root));
+
+            Assert.Single(catalog.Ordered(false));
+            Assert.Equal(artifact.SourceId, catalog.Ordered(false)[0].SourceId);
         }
         finally { Directory.Delete(root, true); }
     }

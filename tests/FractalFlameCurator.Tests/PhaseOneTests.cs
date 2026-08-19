@@ -142,7 +142,7 @@ public sealed class PhaseOneTests
     }
 
     [Fact]
-    public void RatingCopiesOnlyImagesAndUndoPreservesSourceArchive()
+    public void RatingMovesPngAndFlameTogetherAndUndoRestoresThePair()
     {
         var root = NewTempDirectory();
         try
@@ -153,16 +153,27 @@ public sealed class PhaseOneTests
             var artifact = archive.Save(genome, frame, 1);
             var ratings = new RatingStore(root);
             ratings.Rate(artifact.ImagePath, 2);
-            Assert.True(File.Exists(artifact.ImagePath));
-            Assert.True(File.Exists(artifact.FlamePath));
+            var ratingTwoImage = Path.Combine(root, "ratings", "2", artifact.SourceId + ".png");
+            var ratingTwoFlame = Path.Combine(root, "ratings", "2", artifact.SourceId + ".flame");
+            Assert.False(File.Exists(artifact.ImagePath));
+            Assert.False(File.Exists(artifact.FlamePath));
+            Assert.True(File.Exists(ratingTwoImage));
+            Assert.True(File.Exists(ratingTwoFlame));
             Assert.Equal(2, ratings.FindRating(artifact.ImagePath));
-            Assert.True(ratings.RatingFoldersContainImagesOnly());
-            Assert.Empty(Directory.EnumerateFiles(Path.Combine(root, "ratings", "2"), "*.flame"));
-            ratings.Rate(artifact.ImagePath, 5);
+            Assert.True(ratings.RatingFoldersContainPairedFiles());
+            ratings.Rate(ratingTwoImage, 5);
             Assert.Equal(5, ratings.FindRating(artifact.ImagePath));
+            Assert.False(File.Exists(ratingTwoImage));
+            Assert.False(File.Exists(ratingTwoFlame));
             Assert.True(ratings.Undo());
             Assert.Equal(2, ratings.FindRating(artifact.ImagePath));
+            Assert.True(File.Exists(ratingTwoImage));
+            Assert.True(File.Exists(ratingTwoFlame));
+            Assert.True(ratings.Undo());
+            Assert.Null(ratings.FindRating(artifact.ImagePath));
+            Assert.True(File.Exists(artifact.ImagePath));
             Assert.True(File.Exists(artifact.FlamePath));
+            Assert.True(ratings.RatingFoldersContainPairedFiles());
         }
         finally { Directory.Delete(root, true); }
     }

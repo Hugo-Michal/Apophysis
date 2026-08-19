@@ -335,7 +335,7 @@ public partial class MainWindow : Window
         SessionTextBlock.Text = status.IsRunning ? $"Session: {(status.IsPaused ? "PAUSED" : "RUNNING")} · {status.Elapsed:hh\\:mm\\:ss} · limit {status.BatchLimit}{sampleProgress}" : "Session: idle";
         var ai = _aiService.Status;
         AiStatusTextBlock.Text = $"AI: {(ai.IsRunning ? (ai.IsPaused ? "PAUSED" : "RUNNING") : "idle")} · pending {ai.PendingImages} · scored {ai.ScoredImages} · progress {ai.Completed}/{ai.Total}\nModel: {ai.ModelVersion ?? "not trained"} · device {ai.Diagnostics.ActiveDevice}";
-        RatingCountTextBlock.Text = _ratingStore is null ? "Rated: 0" : $"Rated: {_ratingStore.RatedImageCount()} · folders image-only: {_ratingStore.RatingFoldersContainImagesOnly()}";
+        RatingCountTextBlock.Text = _ratingStore is null ? "Rated: 0" : $"Rated: {_ratingStore.RatedImageCount()} · PNG/.flame pairs: {_ratingStore.RatingFoldersContainPairedFiles()}";
         if (DateTime.UtcNow >= _nextUiRefresh)
         {
             _nextUiRefresh = DateTime.UtcNow.AddMilliseconds(500);

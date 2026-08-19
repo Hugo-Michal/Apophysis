@@ -33,13 +33,13 @@ The application must:
   CPU rendering with cancellation and no frozen UI.
 - Save every generated source image and matching `.flame` file in a source
   archive. The `.flame` file must remain available after rating.
-- Provide five rating buttons, one through five stars. Rating an image moves or
-  copies only the rendered image into `ratings/1` through `ratings/5`; these
-  folders contain images only, with no metadata or genome files. Provide undo
-  and safe re-rating so mistakes do not lose the source image.
-- Keep the source `.flame` archive separate from the rating folders. Use stable
-  matching basenames so a rated image can always be associated with its source
-  genome without adding sidecar metadata to the rating folders.
+- Provide five rating buttons, one through five stars. Rating an image moves
+  the rendered PNG and its matching `.flame` genome together into
+  `ratings/1` through `ratings/5`, using stable matching basenames. Provide
+  undo and safe re-rating so mistakes do not lose the source pair.
+- Keep each rated PNG and `.flame` together in its rating folder. Unrated source
+  pairs remain in `rendered/`; the rating folders contain only matched PNG and
+  `.flame` pairs, with no other metadata.
 
 ## Phase 1 acceptance checks
 
@@ -49,7 +49,7 @@ The application must:
 - The GUI remains responsive while continuous rendering is active.
 - GPU/CPU backend and render settings are visible and truthful.
 - The default output is monochrome and 2048x2048.
-- Rating and undo preserve the source archive and place only images in the five
+- Rating and undo move and restore complete PNG/`.flame` pairs in the five
   rating folders.
 - Add automated tests for XML validity, seed reproducibility, rating moves,
   cancellation, and queue behavior. Update this file and `features.md`.

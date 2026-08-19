@@ -11,6 +11,11 @@ public sealed class CandidateCatalog
     {
         var current = archive.EnumerateArtifacts()
             .Where(artifact => ratings.FindRating(artifact.ImagePath) is null)
+            .GroupBy(artifact => artifact.SourceId, StringComparer.OrdinalIgnoreCase)
+            .Select(group => group
+                .OrderByDescending(artifact => File.GetLastWriteTimeUtc(artifact.ImagePath))
+                .ThenByDescending(artifact => CandidateFileNaming.TryParseScore(artifact.BaseName, out _))
+                .First())
             .ToDictionary(artifact => artifact.SourceId, StringComparer.OrdinalIgnoreCase);
         foreach (var sourceId in _candidates.Keys.Except(current.Keys, StringComparer.OrdinalIgnoreCase).ToArray()) _candidates.Remove(sourceId);
         foreach (var artifact in current.Values)

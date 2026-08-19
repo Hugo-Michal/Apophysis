@@ -231,7 +231,7 @@ public sealed class ContinuousAiScoringService : IAsyncDisposable
             var scores = await _backend.ScoreAsync(existing, cancellationToken);
             foreach (var score in scores)
             {
-                var renamedPath = RenameRenderedImage(score.ImagePath, score.Score);
+                var renamedPath = RenameRenderedPair(score.ImagePath, score.Score);
                 var finalScore = score with { ImagePath = renamedPath };
                 _scores[finalScore.SourceId] = finalScore;
                 _knownSourceIds.Add(finalScore.SourceId);
@@ -270,21 +270,38 @@ public sealed class ContinuousAiScoringService : IAsyncDisposable
         throw new FileNotFoundException("The rendered image did not become a complete candidate.", path);
     }
 
-    private string RenameRenderedImage(string imagePath, double score)
+    private string RenameRenderedPair(string imagePath, double score)
     {
         var directory = Path.GetDirectoryName(imagePath) ?? _renderedDirectory;
-        var destination = Path.Combine(directory, CandidateFileNaming.WithScorePrefix(Path.GetFileName(imagePath), score));
-        if (string.Equals(imagePath, destination, StringComparison.OrdinalIgnoreCase)) return imagePath;
-        var temporary = imagePath + ".scoring-" + Guid.NewGuid().ToString("N") + ".tmp";
-        File.Move(imagePath, temporary);
+        var flamePath = SourceArchive.FindMatchingFlamePath(imagePath)
+            ?? throw new FileNotFoundException("The matching .flame source is not available.", imagePath);
+        var destinationImagePath = Path.Combine(directory, CandidateFileNaming.WithScorePrefix(Path.GetFileName(imagePath), score));
+        var destinationFlamePath = Path.Combine(directory, CandidateFileNaming.WithScorePrefix(Path.GetFileName(flamePath), score));
+        if (string.Equals(imagePath, destinationImagePath, StringComparison.OrdinalIgnoreCase)
+            && string.Equals(flamePath, destinationFlamePath, StringComparison.OrdinalIgnoreCase)) return imagePath;
+        var token = Guid.NewGuid().ToString("N");
+        var temporaryImagePath = imagePath + ".scoring-" + token + ".tmp";
+        var temporaryFlamePath = flamePath + ".scoring-" + token + ".tmp";
+        File.Move(imagePath, temporaryImagePath);
         try
         {
-            File.Move(temporary, destination, true);
-            return destination;
+            File.Move(flamePath, temporaryFlamePath);
+            try
+            {
+                File.Move(temporaryImagePath, destinationImagePath, true);
+                File.Move(temporaryFlamePath, destinationFlamePath, true);
+                return destinationImagePath;
+            }
+            catch
+            {
+                if (File.Exists(temporaryImagePath) && !File.Exists(imagePath)) File.Move(temporaryImagePath, imagePath);
+                if (File.Exists(temporaryFlamePath) && !File.Exists(flamePath)) File.Move(temporaryFlamePath, flamePath);
+                throw;
+            }
         }
         catch
         {
-            if (File.Exists(temporary) && !File.Exists(imagePath)) File.Move(temporary, imagePath);
+            if (File.Exists(temporaryImagePath) && !File.Exists(imagePath)) File.Move(temporaryImagePath, imagePath);
             throw;
         }
     }

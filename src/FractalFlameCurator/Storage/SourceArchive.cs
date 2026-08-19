@@ -30,7 +30,7 @@ public sealed class SourceArchive
             {
                 var baseName = Path.GetFileNameWithoutExtension(path);
                 var sourceId = CandidateFileNaming.GetSourceId(baseName);
-                var flamePath = Path.Combine(RenderedDirectory, sourceId + ".flame");
+                var flamePath = FindMatchingFlamePath(path)!;
                 return new RenderedArtifact(baseName, path, flamePath, 0, ParseSequence(sourceId));
             })
             .OrderBy(artifact => artifact.SourceId, StringComparer.OrdinalIgnoreCase)
@@ -40,20 +40,34 @@ public sealed class SourceArchive
     public static bool IsCompleteCandidate(string imagePath)
     {
         if (!File.Exists(imagePath)) return false;
-        var sourceId = CandidateFileNaming.GetSourceId(Path.GetFileNameWithoutExtension(imagePath));
-        var flamePath = Path.Combine(Path.GetDirectoryName(imagePath) ?? ".", sourceId + ".flame");
-        if (!File.Exists(flamePath)) return false;
+        var flamePath = FindMatchingFlamePath(imagePath);
+        if (flamePath is null) return false;
         try
         {
             using var stream = new FileStream(imagePath, FileMode.Open, FileAccess.Read, FileShare.Read);
-            return stream.Length > 0;
+            using var flameStream = new FileStream(flamePath, FileMode.Open, FileAccess.Read, FileShare.Read);
+            return stream.Length > 0 && flameStream.Length > 0;
         }
         catch (IOException) { return false; }
     }
 
-    public RenderedArtifact Save(FlameGenome genome, RenderedFrame frame, int sequence)
+    public static string? FindMatchingFlamePath(string imagePath)
     {
-        var baseName = $"flame_{sequence:000000}_seed_{genome.Seed}";
+        var directory = Path.GetDirectoryName(imagePath) ?? ".";
+        if (!Directory.Exists(directory)) return null;
+        var exactPath = Path.Combine(directory, Path.GetFileNameWithoutExtension(imagePath) + ".flame");
+        if (File.Exists(exactPath)) return exactPath;
+        var sourceId = CandidateFileNaming.GetSourceId(Path.GetFileName(imagePath));
+        return Directory.EnumerateFiles(directory, "*.flame", SearchOption.TopDirectoryOnly)
+            .Where(path => string.Equals(CandidateFileNaming.GetSourceId(Path.GetFileName(path)), sourceId, StringComparison.OrdinalIgnoreCase))
+            .OrderByDescending(File.GetLastWriteTimeUtc)
+            .FirstOrDefault();
+    }
+
+    public RenderedArtifact Save(FlameGenome genome, RenderedFrame frame, int sequence, string? sessionId = null)
+    {
+        var runSuffix = string.IsNullOrWhiteSpace(sessionId) ? string.Empty : $"_run_{SanitizeSessionId(sessionId)}";
+        var baseName = $"flame_{sequence:000000}_seed_{genome.Seed}{runSuffix}";
         var imagePath = Path.Combine(RenderedDirectory, baseName + ".png");
         var flamePath = Path.Combine(RenderedDirectory, baseName + ".flame");
         var imageTemp = imagePath + ".tmp";
@@ -83,5 +97,11 @@ public sealed class SourceArchive
         var valueStart = start + marker.Length;
         var value = sourceId[valueStart..].TakeWhile(char.IsDigit).ToArray();
         return int.TryParse(new string(value), out var sequence) ? sequence : 0;
+    }
+
+    private static string SanitizeSessionId(string sessionId)
+    {
+        var safe = new string(sessionId.Where(character => char.IsLetterOrDigit(character) || character is '-' or '_').ToArray());
+        return string.IsNullOrWhiteSpace(safe) ? "session" : safe;
     }
 }

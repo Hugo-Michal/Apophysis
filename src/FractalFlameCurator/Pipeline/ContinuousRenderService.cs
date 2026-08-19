@@ -14,6 +14,7 @@ public sealed record ContinuousRenderOptions
     public int QueueCapacity { get; init; } = 4;
     public int WorkerCount { get; init; } = Math.Max(1, Math.Min(4, Environment.ProcessorCount));
     public long Seed { get; init; } = DateTime.UtcNow.Ticks;
+    public string SessionId { get; init; } = Guid.NewGuid().ToString("N")[..8];
     public RenderSettings RenderSettings { get; init; } = new();
     public PaletteDefinition Palette { get; init; } = PaletteDefinition.Monochrome;
 }
@@ -194,7 +195,7 @@ public sealed class ContinuousRenderService : IAsyncDisposable
                 Volatile.Write(ref _activeSamples, 0);
                 Volatile.Write(ref _activeSampleBudget, 0);
                 var archive = new SourceArchive(options.OutputDirectory);
-                var artifact = archive.Save(genome, frame, job.Sequence);
+                var artifact = archive.Save(genome, frame, job.Sequence, options.SessionId);
                 _ready.Enqueue(artifact);
                 Interlocked.Increment(ref _completed);
                 ImageReady?.Invoke(artifact);
