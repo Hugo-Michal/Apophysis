@@ -75,6 +75,20 @@ public sealed class RatingStore
 
     public int RatedImageCount() => Enumerable.Range(1, 5).SelectMany(rating => Directory.EnumerateFiles(GetRatingDirectory(rating), "*.png", SearchOption.TopDirectoryOnly)).Select(Path.GetFileName).Distinct(StringComparer.OrdinalIgnoreCase).Count();
 
+    public IReadOnlyList<RenderedArtifact> EnumerateRatedArtifacts()
+    {
+        return Enumerable.Range(1, 5)
+            .SelectMany(rating => Directory.EnumerateFiles(GetRatingDirectory(rating), "*.png", SearchOption.TopDirectoryOnly))
+            .Where(SourceArchive.IsCompleteCandidate)
+            .Select(path =>
+            {
+                var flamePath = SourceArchive.FindMatchingFlamePath(path)!;
+                return new RenderedArtifact(Path.GetFileNameWithoutExtension(path), path, flamePath, 0, 0);
+            })
+            .OrderBy(artifact => artifact.SourceId, StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+    }
+
     public bool RatingFoldersContainPairedFiles()
     {
         var files = Enumerable.Range(1, 5).SelectMany(rating => Directory.EnumerateFiles(GetRatingDirectory(rating), "*", SearchOption.TopDirectoryOnly)).ToArray();

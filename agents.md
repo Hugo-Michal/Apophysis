@@ -43,6 +43,10 @@ The application must:
 - Provide an expandable Image settings drawer with truthful palette, quality,
   tone, and density controls. Apply changes to the current viewport only through
   an explicit cancellable re-render that preserves the source `.flame` pair.
+- Keep the Image drawer compact and accessible without reducing font sizes or
+  removing controls. The current-flame re-render action must toggle to
+  cancellation while active, and the rated-flame batch action may replace
+  rated PNGs in place while preserving rating folders and source `.flame` pairs.
 
 ## Phase 1 acceptance checks
 

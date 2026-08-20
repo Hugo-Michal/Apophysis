@@ -172,6 +172,19 @@ public sealed class ContinuousAiScoringService : IAsyncDisposable
         await ScorePathsAsync(paths, cancellationToken);
     }
 
+    public async Task<int> RescoreRatedAsync(RatingStore ratings, CancellationToken cancellationToken = default)
+    {
+        if (!_backend.Diagnostics.AiReady) throw new InvalidOperationException("AI scoring is disabled. CUDA and a usable PyTorch DINOv2 runtime are required.");
+        var paths = ratings.EnumerateRatedArtifacts()
+            .Select(artifact => artifact.ImagePath)
+            .Where(SourceArchive.IsCompleteCandidate)
+            .ToArray();
+        if (paths.Length == 0) return 0;
+        Interlocked.Add(ref _total, paths.Length);
+        await ScorePathsAsync(paths, cancellationToken, renamePairs: false);
+        return paths.Length;
+    }
+
     public bool TryGetScore(string sourceId, out PreferenceScore score) => _scores.TryGetValue(sourceId, out score!);
 
     public async Task InvalidateAsync(string sourceId, CancellationToken cancellationToken = default)
@@ -232,7 +245,7 @@ public sealed class ContinuousAiScoringService : IAsyncDisposable
         }
     }
 
-    private async Task ScorePathsAsync(IReadOnlyList<string> paths, CancellationToken cancellationToken)
+    private async Task ScorePathsAsync(IReadOnlyList<string> paths, CancellationToken cancellationToken, bool renamePairs = true)
     {
         await _inferenceGate.WaitAsync(cancellationToken);
         try
@@ -242,7 +255,7 @@ public sealed class ContinuousAiScoringService : IAsyncDisposable
             var scores = await _backend.ScoreAsync(existing, cancellationToken);
             foreach (var score in scores)
             {
-                var renamedPath = RenameRenderedPair(score.ImagePath, score.Score);
+                var renamedPath = renamePairs ? RenameRenderedPair(score.ImagePath, score.Score) : score.ImagePath;
                 var finalScore = score with { ImagePath = renamedPath };
                 _scores[finalScore.SourceId] = finalScore;
                 _knownSourceIds.Add(finalScore.SourceId);

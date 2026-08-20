@@ -1,0 +1,65 @@
+{
+  "input_folder": "D:\\Codex projects\\2026_07_14 Apophysis\\research\\web_fractals_2026-08-20",
+  "output_folder": "D:\\Codex projects\\2026_07_14 Apophysis\\research\\normalized_fractals_bw_test",
+  "method": "rec709_luminance -> adaptive border inversion -> percentile contrast -> gamma -> white background",
+  "processed": 4,
+  "failures": [],
+  "images": [
+    {
+      "input_file": "004_fractal-flame_Ancient_flame.jpg",
+      "output_file": "004_fractal-flame_Ancient_flame.png",
+      "width": 1280,
+      "height": 720,
+      "inverted": true,
+      "border_luminance": 33.35820007324219,
+      "global_median_luminance": 47.40019989013672,
+      "low_percentile": 15.324886322021484,
+      "high_percentile": 215.49620056152344,
+      "gamma": 1.5423131906986236,
+      "input_mean": 57.5804443359375,
+      "output_mean": 215.97759765625
+    },
+    {
+      "input_file": "006_fractal-flame_APO_05.jpg",
+      "output_file": "006_fractal-flame_APO_05.png",
+      "width": 1280,
+      "height": 720,
+      "inverted": true,
+      "border_luminance": 13.358200073242188,
+      "global_median_luminance": 28.586400985717773,
+      "low_percentile": 57.13077163696289,
+      "high_percentile": 235.49620056152344,
+      "gamma": 1.5179546201229095,
+      "input_mean": 39.20130157470703,
+      "output_mean": 209.74011501736112
+    },
+    {
+      "input_file": "google_002_be2d7826985003_5604fa739f69f.png",
+      "output_file": "google_002_be2d7826985003_5604fa739f69f.png",
+      "width": 900,
+      "height": 900,
+      "inverted": true,
+      "border_luminance": 33.954200744628906,
+      "global_median_luminance": 60.14400100708008,
+      "low_percentile": 0.5775909423828125,
+      "high_percentile": 214.7449951171875,
+      "gamma": 1.4128223979473113,
+      "input_mean": 86.69082641601562,
+      "output_mean": 184.02806666666666
+    },
+    {
+      "input_file": "google_003_Apophysis_3D_fractal_ball.jpg",
+      "output_file": "google_003_Apophysis_3D_fractal_ball.png",
+      "width": 1920,
+      "height": 1920,
+      "inverted": true,
+      "border_luminance": 1.8555999994277954,
+      "global_median_luminance": 8.846400260925293,
+      "low_percentile": 26.66119384765625,
+      "high_percentile": 246.93179321289062,
+      "gamma": 1.5692382329702377,
+      "input_mean": 20.496706008911133,
+      "output_mean": 231.13228759765624
+    }
+  ]
+}

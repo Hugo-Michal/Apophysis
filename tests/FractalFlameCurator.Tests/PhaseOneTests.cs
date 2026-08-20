@@ -192,6 +192,10 @@ public sealed class PhaseOneTests
             Assert.True(File.Exists(ratingTwoImage));
             Assert.True(File.Exists(ratingTwoFlame));
             Assert.Equal(2, ratings.FindRating(artifact.ImagePath));
+            var ratedArtifacts = ratings.EnumerateRatedArtifacts();
+            Assert.Single(ratedArtifacts);
+            Assert.Equal(ratingTwoImage, ratedArtifacts[0].ImagePath);
+            Assert.Equal(ratingTwoFlame, ratedArtifacts[0].FlamePath);
             Assert.True(ratings.RatingFoldersContainPairedFiles());
             ratings.Rate(ratingTwoImage, 5);
             Assert.Equal(5, ratings.FindRating(artifact.ImagePath));

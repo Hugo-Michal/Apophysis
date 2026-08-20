@@ -139,6 +139,35 @@ public sealed class PhaseTwoTests
     }
 
     [Fact]
+    public async Task RatedDatasetCanBeRescoredWithoutMovingOrRenamingFiles()
+    {
+        var root = NewTempDirectory();
+        try
+        {
+            var archive = new SourceArchive(root);
+            var rated = archive.Save(new Generation.FlameGenerator().Generate(31), BlankFrame(), 1);
+            var ratings = new RatingStore(root);
+            ratings.Rate(rated.ImagePath, 3);
+            var ratedImagePath = Path.Combine(root, "ratings", "3", rated.SourceId + ".png");
+            var ratedFlamePath = Path.Combine(root, "ratings", "3", rated.SourceId + ".flame");
+            var beforeFlame = File.ReadAllText(ratedFlamePath);
+
+            await using var service = new ContinuousAiScoringService(new FakeBackend(0.74, "model-one"));
+            await service.InitializeAsync();
+            var count = await service.RescoreRatedAsync(ratings);
+
+            Assert.Equal(1, count);
+            Assert.True(File.Exists(ratedImagePath));
+            Assert.True(File.Exists(ratedFlamePath));
+            Assert.Equal(beforeFlame, File.ReadAllText(ratedFlamePath));
+            Assert.Equal(ratedImagePath, service.Scores[rated.SourceId].ImagePath);
+            Assert.Equal(0.74, service.Scores[rated.SourceId].Score, 6);
+            Assert.True(ratings.RatingFoldersContainPairedFiles());
+        }
+        finally { Directory.Delete(root, true); }
+    }
+
+    [Fact]
     public async Task RetrainingReplacesModelAndRescoresExistingCandidates()
     {
         var root = NewTempDirectory();

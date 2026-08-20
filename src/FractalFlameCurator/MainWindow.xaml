@@ -2,18 +2,18 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="Native Fractal-Flame Curator"
-        Width="1460" Height="920" MinWidth="1100" MinHeight="700"
+        Width="1540" Height="920" MinWidth="1180" MinHeight="700"
         Background="#0D1218" Foreground="#F3F6FA"
         KeyDown="Window_KeyDown" Closing="Window_Closing">
   <Grid Margin="14">
     <Grid.ColumnDefinitions>
-      <ColumnDefinition Width="350" />
+      <ColumnDefinition Width="430" />
       <ColumnDefinition Width="14" />
       <ColumnDefinition Width="*" />
     </Grid.ColumnDefinitions>
 
-    <Border Grid.Column="0" Background="{StaticResource PanelBrush}" BorderBrush="{StaticResource PanelBorderBrush}" BorderThickness="1" Padding="14">
-      <ScrollViewer VerticalScrollBarVisibility="Auto">
+    <Border Grid.Column="0" Background="{StaticResource PanelBrush}" BorderBrush="{StaticResource PanelBorderBrush}" BorderThickness="1" Padding="12">
+      <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
         <StackPanel>
           <TextBlock Text="FRACTAL-FLAME CURATOR" FontSize="20" FontWeight="SemiBold" Margin="0,0,0,2" />
           <TextBlock Text="Phase 2 · optional learned preference ranking" Foreground="{StaticResource MutedTextBrush}" Margin="0,0,0,12" />
@@ -28,81 +28,94 @@
               </Grid>
               <Label Content="Base random seed" />
               <TextBox x:Name="SeedTextBox" />
-              <Grid Margin="0,4,0,0">
-                <Grid.ColumnDefinitions><ColumnDefinition /><ColumnDefinition Width="10" /><ColumnDefinition /></Grid.ColumnDefinitions>
-                <StackPanel Grid.Column="0"><Label Content="Session limit" /><TextBox x:Name="BatchLimitTextBox" /></StackPanel>
-                <StackPanel Grid.Column="2"><Label Content="Workers" /><TextBox x:Name="WorkersTextBox" /></StackPanel>
+              <Grid Margin="0,2,0,0">
+                <Grid.ColumnDefinitions>
+                  <ColumnDefinition />
+                  <ColumnDefinition Width="8" />
+                  <ColumnDefinition />
+                  <ColumnDefinition Width="8" />
+                  <ColumnDefinition />
+                </Grid.ColumnDefinitions>
+                <StackPanel Grid.Column="0"><Label Content="Session limit" Target="{Binding ElementName=BatchLimitTextBox}" /><TextBox x:Name="BatchLimitTextBox" /></StackPanel>
+                <StackPanel Grid.Column="2"><Label Content="Workers" Target="{Binding ElementName=WorkersTextBox}" /><TextBox x:Name="WorkersTextBox" /></StackPanel>
+                <StackPanel Grid.Column="4"><Label Content="Bounded render queue" Target="{Binding ElementName=QueueCapacityTextBox}" /><TextBox x:Name="QueueCapacityTextBox" /></StackPanel>
               </Grid>
-              <Label Content="Bounded render queue" />
-              <TextBox x:Name="QueueCapacityTextBox" />
-              <StackPanel Orientation="Horizontal" Margin="-3,7,0,9">
-                <Button Content="Start" Click="Start_Click" IsDefault="True" />
-                <Button Content="Pause" Click="Pause_Click" />
-                <Button Content="Resume" Click="Resume_Click" />
-                <Button Content="Stop" Click="Stop_Click" />
-              </StackPanel>
+              <WrapPanel Margin="-2,5,0,6">
+                <Button x:Name="StartStopRenderButton" Content="Start" Click="Start_Click" IsDefault="True" ToolTip="Start rendering, or stop the active render session" />
+                <Button x:Name="PauseResumeRenderButton" Content="Pause" Click="Pause_Click" ToolTip="Pause rendering, or resume the paused render session" />
+              </WrapPanel>
               <TextBlock Text="Built-in renderer: bounded managed CPU · 2048×2048 default" Foreground="{StaticResource MutedTextBrush}" TextWrapping="Wrap" />
               <TextBlock x:Name="QueueTextBlock" Foreground="{StaticResource MutedTextBrush}" TextWrapping="Wrap" Margin="0,8,0,0" />
               <TextBlock x:Name="SessionTextBlock" Foreground="{StaticResource MutedTextBrush}" TextWrapping="Wrap" />
             </StackPanel>
           </Expander>
 
-          <Expander Header="Image" IsExpanded="True" Margin="0,0,0,6">
+          <Expander Header="Image" IsExpanded="False" Margin="0,0,0,6">
             <StackPanel>
-              <TextBlock Text="These settings affect the current viewport only after you re-render. The source .flame file is preserved." Foreground="{StaticResource MutedTextBrush}" TextWrapping="Wrap" Margin="0,0,0,5" />
-              <Label Content="Sample budget (points)" Target="{Binding ElementName=SampleBudgetTextBox}" />
-              <TextBox x:Name="SampleBudgetTextBox" ToolTip="Number of points used for the render" AutomationProperties.HelpText="Number of points used for the render" />
+              <TextBlock Text="These settings affect the current viewport only after you re-render. The source .flame file is preserved." Foreground="{StaticResource MutedTextBrush}" TextWrapping="Wrap" Margin="0,0,0,4" />
               <Grid>
-                <Grid.ColumnDefinitions><ColumnDefinition /><ColumnDefinition Width="10" /><ColumnDefinition /></Grid.ColumnDefinitions>
-                <StackPanel Grid.Column="0"><Label Content="Oversample" Target="{Binding ElementName=OversampleComboBox}" /><ComboBox x:Name="OversampleComboBox" ToolTip="Internal render multiplier before downsampling"><ComboBoxItem Content="1" /><ComboBoxItem Content="2" /><ComboBoxItem Content="3" /></ComboBox></StackPanel>
-                <StackPanel Grid.Column="2"><Label Content="Filter radius" Target="{Binding ElementName=FilterRadiusTextBox}" /><TextBox x:Name="FilterRadiusTextBox" ToolTip="Downsampling filter radius" /></StackPanel>
+                <Grid.ColumnDefinitions><ColumnDefinition /><ColumnDefinition Width="8" /><ColumnDefinition /></Grid.ColumnDefinitions>
+                <StackPanel Grid.Column="0"><Label Content="Sample budget (points)" Target="{Binding ElementName=SampleBudgetTextBox}" /><TextBox x:Name="SampleBudgetTextBox" ToolTip="Number of points used for the render" AutomationProperties.HelpText="Number of points used for the render" /></StackPanel>
+                <StackPanel Grid.Column="2"><Label Content="Oversample" Target="{Binding ElementName=OversampleComboBox}" /><ComboBox x:Name="OversampleComboBox" ItemContainerStyle="{StaticResource DarkComboBoxItemStyle}" ToolTip="Internal render multiplier before downsampling"><ComboBoxItem Content="1" /><ComboBoxItem Content="2" /><ComboBoxItem Content="3" /></ComboBox></StackPanel>
               </Grid>
               <Grid>
-                <Grid.ColumnDefinitions><ColumnDefinition /><ColumnDefinition Width="10" /><ColumnDefinition /></Grid.ColumnDefinitions>
-                <StackPanel Grid.Column="0"><Label Content="Gamma" Target="{Binding ElementName=GammaTextBox}" /><TextBox x:Name="GammaTextBox" ToolTip="Tone response; lower values increase separation in this renderer" /></StackPanel>
-                <StackPanel Grid.Column="2"><Label Content="Brightness" Target="{Binding ElementName=BrightnessTextBox}" /><TextBox x:Name="BrightnessTextBox" ToolTip="Exposure applied before tone mapping" /></StackPanel>
+                <Grid.ColumnDefinitions><ColumnDefinition /><ColumnDefinition Width="8" /><ColumnDefinition /></Grid.ColumnDefinitions>
+                <StackPanel Grid.Column="0"><Label Content="Filter radius" Target="{Binding ElementName=FilterRadiusTextBox}" /><TextBox x:Name="FilterRadiusTextBox" ToolTip="Downsampling filter radius" /></StackPanel>
+                <StackPanel Grid.Column="2"><Label Content="Gamma" Target="{Binding ElementName=GammaTextBox}" /><TextBox x:Name="GammaTextBox" ToolTip="Tone response; lower values increase separation in this renderer" /></StackPanel>
               </Grid>
               <Grid>
-                <Grid.ColumnDefinitions><ColumnDefinition /><ColumnDefinition Width="10" /><ColumnDefinition /></Grid.ColumnDefinitions>
+                <Grid.ColumnDefinitions><ColumnDefinition /><ColumnDefinition Width="8" /><ColumnDefinition /></Grid.ColumnDefinitions>
+                <StackPanel Grid.Column="0"><Label Content="Brightness" Target="{Binding ElementName=BrightnessTextBox}" /><TextBox x:Name="BrightnessTextBox" ToolTip="Exposure applied before tone mapping" /></StackPanel>
+                <StackPanel Grid.Column="2"><Label Content="Vibrancy" Target="{Binding ElementName=VibrancyTextBox}" /><TextBox x:Name="VibrancyTextBox" ToolTip="Color saturation for non-monochrome palettes" /></StackPanel>
+              </Grid>
+              <Grid>
+                <Grid.ColumnDefinitions><ColumnDefinition /><ColumnDefinition Width="8" /><ColumnDefinition /></Grid.ColumnDefinitions>
                 <StackPanel Grid.Column="0"><Label Content="White point (0–1)" Target="{Binding ElementName=WhitePointTextBox}" /><TextBox x:Name="WhitePointTextBox" ToolTip="Normalized density at or below which pixels are white" /></StackPanel>
                 <StackPanel Grid.Column="2"><Label Content="Black point (0–1)" Target="{Binding ElementName=BlackPointTextBox}" /><TextBox x:Name="BlackPointTextBox" ToolTip="Normalized density at or above which pixels are black" /></StackPanel>
               </Grid>
               <Grid>
-                <Grid.ColumnDefinitions><ColumnDefinition /><ColumnDefinition Width="10" /><ColumnDefinition /></Grid.ColumnDefinitions>
+                <Grid.ColumnDefinitions><ColumnDefinition /><ColumnDefinition Width="8" /><ColumnDefinition /></Grid.ColumnDefinitions>
                 <StackPanel Grid.Column="0"><Label Content="Contrast curve" Target="{Binding ElementName=ContrastCurveTextBox}" /><TextBox x:Name="ContrastCurveTextBox" ToolTip="1 is neutral; values above 1 increase midtone separation" /></StackPanel>
                 <StackPanel Grid.Column="2"><Label Content="Low-density cutoff" Target="{Binding ElementName=LowDensityCutoffTextBox}" /><TextBox x:Name="LowDensityCutoffTextBox" ToolTip="Normalized density below which the pixel becomes white" /></StackPanel>
               </Grid>
-              <Label Content="Vibrancy" Target="{Binding ElementName=VibrancyTextBox}" />
-              <TextBox x:Name="VibrancyTextBox" ToolTip="Color saturation for non-monochrome palettes" />
-              <Label Content="Palette" Target="{Binding ElementName=PaletteComboBox}" />
-              <ComboBox x:Name="PaletteComboBox" DisplayMemberPath="Name" ToolTip="Palette used for the next render" />
-              <TextBlock Text="Monochrome is the explicit default. Additional palettes are opt-in." Foreground="{StaticResource MutedTextBrush}" TextWrapping="Wrap" Margin="0,4,0,0" />
-              <StackPanel Orientation="Horizontal" Margin="-3,8,0,0">
-                <Button x:Name="RerenderCurrentButton" Content="Re-render current flame" Click="RerenderCurrent_Click" ToolTip="Render the selected source flame with these image settings" />
-                <Button x:Name="CancelRerenderButton" Content="Cancel" Click="CancelRerender_Click" IsEnabled="False" ToolTip="Cancel the current re-render" />
-              </StackPanel>
-              <TextBlock x:Name="ImageSettingsStatusTextBlock" Foreground="{StaticResource MutedTextBrush}" TextWrapping="Wrap" Margin="0,5,0,0" />
+              <Grid Margin="0,1,0,0">
+                <Grid.ColumnDefinitions><ColumnDefinition /><ColumnDefinition Width="8" /><ColumnDefinition /></Grid.ColumnDefinitions>
+                <StackPanel Grid.Column="0">
+                  <Label Content="Palette" Target="{Binding ElementName=PaletteComboBox}" />
+                  <ComboBox x:Name="PaletteComboBox" ItemContainerStyle="{StaticResource DarkComboBoxItemStyle}" ToolTip="Palette used for the next render">
+                    <ComboBox.ItemTemplate>
+                      <DataTemplate>
+                        <TextBlock Text="{Binding Name}" Foreground="{StaticResource TextBrush}" />
+                      </DataTemplate>
+                    </ComboBox.ItemTemplate>
+                  </ComboBox>
+                </StackPanel>
+              </Grid>
+              <TextBlock Text="Monochrome is the explicit default. Additional palettes are opt-in." Foreground="{StaticResource MutedTextBrush}" TextWrapping="Wrap" Margin="0,2,0,0" />
+              <WrapPanel Margin="-2,5,0,0">
+                <Button x:Name="RerenderCurrentButton" Content="Re-render current flame" Click="RerenderCurrent_Click" ToolTip="Render the selected source flame, or cancel while it is running" />
+                <Button x:Name="RerenderRatedButton" Content="Re-render rated flames" Click="RerenderRated_Click" ToolTip="Replace all rated PNGs using the current image settings" />
+              </WrapPanel>
+              <TextBlock x:Name="ImageSettingsStatusTextBlock" Foreground="{StaticResource MutedTextBrush}" TextWrapping="Wrap" Margin="0,3,0,0" />
             </StackPanel>
           </Expander>
 
           <Expander Header="AI Scoring" IsExpanded="True" Margin="0,0,0,6">
             <StackPanel>
               <TextBlock Text="DINOv2 ViT-B/14 · frozen backbone · four-threshold ordinal head" Foreground="{StaticResource MutedTextBrush}" TextWrapping="Wrap" />
-              <StackPanel Orientation="Horizontal" Margin="-3,7,0,5">
+              <WrapPanel Margin="-2,7,0,5">
                 <Button Content="Start AI scoring" Click="StartAi_Click" />
-                <Button Content="Pause" Click="PauseAi_Click" />
-                <Button Content="Resume" Click="ResumeAi_Click" />
-                <Button Content="Stop" Click="StopAi_Click" />
-              </StackPanel>
-              <Button Content="Train Model" Click="TrainModel_Click" HorizontalAlignment="Left" />
-              <CheckBox x:Name="DoNotShowTrainingWarningCheckBox" Content="Do not show the small-data warning again" Margin="3,6,0,2" />
+                <Button Content="Stop AI scoring" Click="StopAi_Click" />
+                <Button Content="Train Model" Click="TrainModel_Click" />
+                <Button x:Name="RescoreRatedDatasetButton" Content="Rescore rated" Click="RescoreRatedDataset_Click" ToolTip="Score all images in ratings/1–5 with the current AI model without moving, deleting, or changing their ratings" />
+              </WrapPanel>
               <TextBlock x:Name="TrainingWarningTextBlock" Foreground="#F4B860" TextWrapping="Wrap" />
               <TextBlock x:Name="AiStatusTextBlock" Foreground="{StaticResource MutedTextBrush}" TextWrapping="Wrap" />
               <TextBlock x:Name="TrainingMetricsTextBlock" Foreground="{StaticResource MutedTextBrush}" TextWrapping="Wrap" />
             </StackPanel>
           </Expander>
 
-          <Expander Header="Dataset Statistics" IsExpanded="True" Margin="0,0,0,6">
+          <Expander Header="Dataset Statistics" IsExpanded="False" Margin="0,0,0,6">
             <StackPanel>
               <TextBlock Text="Human ratings only; AI never edits these folders." Foreground="{StaticResource MutedTextBrush}" TextWrapping="Wrap" />
               <Grid Margin="0,6,0,0">

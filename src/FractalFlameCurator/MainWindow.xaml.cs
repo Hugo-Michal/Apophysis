@@ -40,8 +40,13 @@ public partial class MainWindow : Window
     private bool _fitToViewport = true;
     private bool _applyingZoom;
     private bool _closing;
+    private bool _renderControlsLocked;
     private CancellationTokenSource? _rerenderCancellation;
     private Task? _activeRerender;
+    private CancellationTokenSource? _ratedRerenderCancellation;
+    private Task? _activeRatedRerender;
+    private CancellationTokenSource? _ratedRescoreCancellation;
+    private Task? _activeRatedRescore;
     private DateTime _nextUiRefresh;
 
     public MainWindow()
@@ -64,10 +69,10 @@ public partial class MainWindow : Window
         SampleBudgetTextBox.Text = "20000000";
         OversampleComboBox.SelectedIndex = 0;
         FilterRadiusTextBox.Text = "0.5";
-        GammaTextBox.Text = "2.2";
+        GammaTextBox.Text = "1";
         BrightnessTextBox.Text = "1.0";
         WhitePointTextBox.Text = "0.0";
-        BlackPointTextBox.Text = "1.0";
+        BlackPointTextBox.Text = "0.85";
         ContrastCurveTextBox.Text = "1.0";
         LowDensityCutoffTextBox.Text = "0.01";
         VibrancyTextBox.Text = "1.0";
@@ -92,8 +97,16 @@ public partial class MainWindow : Window
         }
     }
 
-    private void Start_Click(object sender, RoutedEventArgs e)
+    private async void Start_Click(object sender, RoutedEventArgs e)
     {
+        if (_renderControlsLocked) return;
+        if (_renderService.Status.IsRunning)
+        {
+            await _renderService.StopAsync();
+            UpdateRenderActionButtons();
+            return;
+        }
+
         try
         {
             EnsureWorkspace();
@@ -109,6 +122,7 @@ public partial class MainWindow : Window
                 RenderSettings = renderSettings
             };
             _renderService.Start(_sessionOptions);
+            UpdateRenderActionButtons();
             RefreshCandidates();
             if (_current is null) ShowNextReady();
             else EmptyPreviewTextBlock.Visibility = Visibility.Collapsed;
@@ -121,7 +135,18 @@ public partial class MainWindow : Window
 
     private async void RerenderCurrent_Click(object sender, RoutedEventArgs e)
     {
-        if (_activeRerender is not null) return;
+        if (_activeRerender is not null)
+        {
+            _rerenderCancellation?.Cancel();
+            return;
+        }
+
+        if (_activeRatedRerender is not null)
+        {
+            ImageSettingsStatusTextBlock.Text = "A rated-flame re-render is already running.";
+            return;
+        }
+
         _activeRerender = RerenderCurrentAsync();
         try { await _activeRerender; }
         catch (Exception exception) { ImageSettingsStatusTextBlock.Text = $"Re-render failed: {exception.Message}"; }
@@ -153,8 +178,7 @@ public partial class MainWindow : Window
         var settings = ReadImageRenderSettings(out var palette);
         using var cancellation = new CancellationTokenSource();
         _rerenderCancellation = cancellation;
-        RerenderCurrentButton.IsEnabled = false;
-        CancelRerenderButton.IsEnabled = true;
+        RerenderCurrentButton.Content = "Cancel re-render";
         ImageSettingsStatusTextBlock.Text = "Re-rendering current flame…";
         try
         {
@@ -180,12 +204,93 @@ public partial class MainWindow : Window
         finally
         {
             if (ReferenceEquals(_rerenderCancellation, cancellation)) _rerenderCancellation = null;
-            RerenderCurrentButton.IsEnabled = true;
-            CancelRerenderButton.IsEnabled = false;
+            RerenderCurrentButton.Content = "Re-render current flame";
         }
     }
 
-    private void CancelRerender_Click(object sender, RoutedEventArgs e) => _rerenderCancellation?.Cancel();
+    private async void RerenderRated_Click(object sender, RoutedEventArgs e)
+    {
+        if (_activeRatedRerender is not null)
+        {
+            _ratedRerenderCancellation?.Cancel();
+            return;
+        }
+
+        if (_activeRerender is not null)
+        {
+            ImageSettingsStatusTextBlock.Text = "The current-flame re-render is still running.";
+            return;
+        }
+
+        _activeRatedRerender = RerenderRatedAsync();
+        try { await _activeRatedRerender; }
+        catch (Exception exception) { ImageSettingsStatusTextBlock.Text = $"Rated-flame re-render failed: {exception.Message}"; }
+        finally { _activeRatedRerender = null; }
+    }
+
+    private async Task RerenderRatedAsync()
+    {
+        EnsureWorkspace();
+        var artifacts = _ratingStore!.EnumerateRatedArtifacts();
+        if (artifacts.Count == 0)
+        {
+            ImageSettingsStatusTextBlock.Text = "There are no complete rated PNG/.flame pairs to re-render.";
+            return;
+        }
+
+        var result = WpfMessageBox.Show(
+            this,
+            $"Replace {artifacts.Count} rated PNG(s) in ratings/1–5? Star folders and source .flame files will remain unchanged.",
+            "Re-render rated flames",
+            MessageBoxButton.YesNo,
+            MessageBoxImage.Warning);
+        if (result != MessageBoxResult.Yes) return;
+
+        var settings = ReadImageRenderSettings(out var palette);
+        using var cancellation = new CancellationTokenSource();
+        _ratedRerenderCancellation = cancellation;
+        RerenderRatedButton.Content = "Cancel rated re-render";
+        _renderControlsLocked = true;
+        UpdateRenderActionButtons();
+        var workerCount = ParseInt(WorkersTextBox, 1, 1, Math.Max(1, Environment.ProcessorCount));
+        var completed = 0;
+        try
+        {
+            var parallelOptions = new ParallelOptions
+            {
+                CancellationToken = cancellation.Token,
+                MaxDegreeOfParallelism = workerCount
+            };
+            await Parallel.ForEachAsync(artifacts, parallelOptions, async (artifact, token) =>
+            {
+                Dispatcher.Invoke(() =>
+                {
+                    ImageSettingsStatusTextBlock.Text = $"Re-rendering rated flames… {completed}/{artifacts.Count} using {workerCount} workers";
+                });
+                var progress = new Progress<RenderProgress>(update => Dispatcher.Invoke(() =>
+                {
+                    ImageSettingsStatusTextBlock.Text = $"Re-rendering rated flames… {completed}/{artifacts.Count} using {workerCount} workers · {update.CompletedSamples:N0}/{update.TotalSamples:N0} points";
+                }));
+                await _artifactRerenderer.RerenderAsync(artifact, palette, settings, progress, token);
+                var finished = Interlocked.Increment(ref completed);
+                Dispatcher.Invoke(() => ImageSettingsStatusTextBlock.Text = $"Re-rendering rated flames… {finished}/{artifacts.Count} using {workerCount} workers");
+            });
+
+            if (_current is not null && artifacts.Any(artifact => string.Equals(artifact.ImagePath, _current.ImagePath, StringComparison.OrdinalIgnoreCase))) ShowArtifact(_current);
+            ImageSettingsStatusTextBlock.Text = $"Re-rendered {completed} rated flame(s) using {workerCount} workers. Ratings and source .flame files were preserved.";
+        }
+        catch (OperationCanceledException) when (cancellation.IsCancellationRequested)
+        {
+            ImageSettingsStatusTextBlock.Text = $"Rated re-render cancelled after {completed} of {artifacts.Count}; completed replacements were preserved.";
+        }
+        finally
+        {
+            if (ReferenceEquals(_ratedRerenderCancellation, cancellation)) _ratedRerenderCancellation = null;
+            _renderControlsLocked = false;
+            UpdateRenderActionButtons();
+            RerenderRatedButton.Content = "Re-render rated flames";
+        }
+    }
 
     private RenderSettings ReadImageRenderSettings(out PaletteDefinition palette)
     {
@@ -200,7 +305,7 @@ public partial class MainWindow : Window
             SampleBudget = ParseInt(SampleBudgetTextBox, 20_000_000, 100, 500_000_000),
             Oversample = ParseInt((OversampleComboBox.SelectedItem as ComboBoxItem)?.Content?.ToString(), 1, 1, 3),
             FilterRadius = ParseDouble(FilterRadiusTextBox, 0.5, 0, 3),
-            Gamma = ParseDouble(GammaTextBox, 2.2, 0.1, 8),
+            Gamma = ParseDouble(GammaTextBox, 1, 0.1, 8),
             Brightness = ParseDouble(BrightnessTextBox, 1, 0.05, 5),
             Vibrancy = ParseDouble(VibrancyTextBox, 1, 0, 1),
             WhitePoint = whitePoint,
@@ -211,9 +316,20 @@ public partial class MainWindow : Window
         };
     }
 
-    private void Pause_Click(object sender, RoutedEventArgs e) => _renderService.Pause();
-    private void Resume_Click(object sender, RoutedEventArgs e) => _renderService.Resume();
-    private async void Stop_Click(object sender, RoutedEventArgs e) => await _renderService.StopAsync();
+    private void Pause_Click(object sender, RoutedEventArgs e)
+    {
+        if (_renderControlsLocked || !_renderService.Status.IsRunning) return;
+        if (_renderService.Status.IsPaused) _renderService.Resume();
+        else _renderService.Pause();
+        UpdateRenderActionButtons();
+    }
+
+    private async void Stop_Click(object sender, RoutedEventArgs e)
+    {
+        if (_renderControlsLocked) return;
+        await _renderService.StopAsync();
+        UpdateRenderActionButtons();
+    }
 
     private void StartAi_Click(object sender, RoutedEventArgs e)
     {
@@ -228,9 +344,64 @@ public partial class MainWindow : Window
         catch (Exception exception) { WpfMessageBox.Show(this, exception.Message, "Could not start AI scoring", MessageBoxButton.OK, MessageBoxImage.Warning); }
     }
 
-    private void PauseAi_Click(object sender, RoutedEventArgs e) => _aiService.Pause();
-    private void ResumeAi_Click(object sender, RoutedEventArgs e) => _aiService.Resume();
     private async void StopAi_Click(object sender, RoutedEventArgs e) { await _aiService.StopAsync(); _aiEnabled = false; }
+
+    private async void RescoreRatedDataset_Click(object sender, RoutedEventArgs e)
+    {
+        if (_activeRatedRescore is not null)
+        {
+            _ratedRescoreCancellation?.Cancel();
+            return;
+        }
+
+        if (_activeRerender is not null || _activeRatedRerender is not null)
+        {
+            AiStatusTextBlock.Text = "Finish image re-rendering before rescoring the rated dataset.";
+            return;
+        }
+
+        _activeRatedRescore = RescoreRatedDatasetAsync();
+        try { await _activeRatedRescore; }
+        catch (Exception exception) { AiStatusTextBlock.Text = $"Rated dataset rescore failed: {exception.Message}"; }
+        finally { _activeRatedRescore = null; }
+    }
+
+    private async Task RescoreRatedDatasetAsync()
+    {
+        EnsureWorkspace();
+        if (_aiService.Status.IsTraining)
+        {
+            AiStatusTextBlock.Text = "Wait for model training to finish before rescoring the rated dataset.";
+            return;
+        }
+
+        var ratedCount = _ratingStore!.EnumerateRatedArtifacts().Count;
+        if (ratedCount == 0)
+        {
+            AiStatusTextBlock.Text = "There are no complete rated PNG/.flame pairs to rescore.";
+            return;
+        }
+
+        using var cancellation = new CancellationTokenSource();
+        _ratedRescoreCancellation = cancellation;
+        RescoreRatedDatasetButton.Content = "Cancel rescore";
+        TrainingMetricsTextBlock.Text = $"Rescoring {ratedCount} rated image(s)… ratings and files will remain unchanged.";
+        try
+        {
+            var rescored = await _aiService.RescoreRatedAsync(_ratingStore, cancellation.Token);
+            UpdateCurrentText();
+            TrainingMetricsTextBlock.Text = $"Rescored {rescored} rated image(s). Ratings and PNG/.flame files were unchanged.";
+        }
+        catch (OperationCanceledException) when (cancellation.IsCancellationRequested)
+        {
+            TrainingMetricsTextBlock.Text = "Rated dataset rescore cancelled. Ratings and PNG/.flame files were unchanged.";
+        }
+        finally
+        {
+            if (ReferenceEquals(_ratedRescoreCancellation, cancellation)) _ratedRescoreCancellation = null;
+            RescoreRatedDatasetButton.Content = "Rescore rated";
+        }
+    }
 
     private async void TrainModel_Click(object sender, RoutedEventArgs e)
     {
@@ -239,11 +410,6 @@ public partial class MainWindow : Window
             EnsureWorkspace();
             var snapshot = PreferenceDatasetBuilder.Snapshot(OutputDirectoryTextBox.Text.Trim());
             UpdateDatasetStatistics(snapshot.Statistics);
-            if (TrainingWarningPolicy.ShouldShow(snapshot.Statistics, DoNotShowTrainingWarningCheckBox.IsChecked == true))
-            {
-                var result = WpfMessageBox.Show(this, $"This corpus has {snapshot.Statistics.Total} rated image(s). Training is allowed, but validation/test metrics may be unreliable. Continue?", "Small dataset warning", MessageBoxButton.YesNo, MessageBoxImage.Warning);
-                if (result != MessageBoxResult.Yes) return;
-            }
             if (!_aiService.Status.IsRunning) _aiService.Start(OutputDirectoryTextBox.Text.Trim(), _ratingStore!);
             _aiEnabled = true;
             TrainingMetricsTextBlock.Text = "Training on the frozen DINOv2 backbone… rendering remains operational.";
@@ -416,13 +582,14 @@ public partial class MainWindow : Window
     {
         if (e.Key >= Key.D1 && e.Key <= Key.D5) { Rating_Click(new WpfButton { Tag = (int)e.Key - (int)Key.D0 }, new RoutedEventArgs()); e.Handled = true; }
         else if (e.Key == Key.U) { Undo_Click(sender, e); e.Handled = true; }
-        else if (e.Key == Key.P) { if (_renderService.Status.IsPaused) Resume_Click(sender, e); else Pause_Click(sender, e); e.Handled = true; }
+        else if (e.Key == Key.P) { Pause_Click(sender, e); e.Handled = true; }
         else if (e.Key == Key.Escape) { Stop_Click(sender, e); e.Handled = true; }
     }
 
     private void UpdateStatus(object? sender, EventArgs e)
     {
         var status = _renderService.Status;
+        UpdateRenderActionButtons();
         QueueTextBlock.Text = $"Queue: {status.QueueDepth}/{_sessionOptions?.QueueCapacity ?? 0} · ready {status.ReadyCount}\nCompleted: {status.Completed} · failures: {status.Failed}";
         var sampleProgress = status.ActiveSampleBudget > 0 ? $" · samples {status.ActiveSamples:N0}/{status.ActiveSampleBudget:N0}" : string.Empty;
         SessionTextBlock.Text = status.IsRunning ? $"Session: {(status.IsPaused ? "PAUSED" : "RUNNING")} · {status.Elapsed:hh\\:mm\\:ss} · limit {status.BatchLimit}{sampleProgress}" : "Session: idle";
@@ -445,9 +612,19 @@ public partial class MainWindow : Window
         _closing = true;
         CompositionTarget.Rendering -= UpdateStatus;
         _rerenderCancellation?.Cancel();
+        _ratedRerenderCancellation?.Cancel();
+        _ratedRescoreCancellation?.Cancel();
         if (_activeRerender is not null)
         {
             try { await _activeRerender; } catch (Exception) { }
+        }
+        if (_activeRatedRerender is not null)
+        {
+            try { await _activeRatedRerender; } catch (Exception) { }
+        }
+        if (_activeRatedRescore is not null)
+        {
+            try { await _activeRatedRescore; } catch (Exception) { }
         }
         await _renderService.StopAsync();
         await _aiService.DisposeAsync();
@@ -489,6 +666,22 @@ public partial class MainWindow : Window
     {
         AiDiagnosticsTextBlock.Text = $"PyTorch: {diagnostics.PyTorchVersion} · CUDA: {(diagnostics.CudaAvailable ? "available" : "unavailable")}\nGPU: {diagnostics.GpuName} · active device: {diagnostics.ActiveDevice}\n{diagnostics.Detail}";
         AiStatusTextBlock.Text = diagnostics.AiReady ? "AI is ready; train a model to begin preference scoring." : "AI scoring/training disabled; manual rendering and rating remain available.";
+    }
+
+    private void UpdateRenderActionButtons()
+    {
+        if (_renderControlsLocked)
+        {
+            StartStopRenderButton.IsEnabled = false;
+            PauseResumeRenderButton.IsEnabled = false;
+            return;
+        }
+
+        var status = _renderService.Status;
+        StartStopRenderButton.Content = status.IsRunning ? "Stop" : "Start";
+        PauseResumeRenderButton.Content = status.IsPaused ? "Resume" : "Pause";
+        StartStopRenderButton.IsEnabled = true;
+        PauseResumeRenderButton.IsEnabled = status.IsRunning;
     }
 
     private void UpdateDatasetStatistics(DatasetStatistics statistics)

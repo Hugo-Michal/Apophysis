@@ -14,6 +14,56 @@ Every agent must add the newest entry at the top whenever behavior changes.
 
 ## Current features
 
+### 2026-08-20 - Disabled render-toggle contrast
+- Change: Added an explicit dark disabled-button style so the Pause/Resume render toggle remains gray and readable instead of switching to the WPF white disabled appearance.
+- Files: `src/FractalFlameCurator/App.xaml`.
+- Notes: The style applies consistently to disabled action buttons, including while rated-frame re-rendering locks the Rendering controls.
+
+### 2026-08-20 - Parallel rated re-render and render-session toggles
+- Change: Rated-frame replacement now runs with the configured Rendering Workers count, reports the active worker count, and disables the Rendering controls while the batch is active. Consolidated Start/Stop and Pause/Resume into two stateful toggle buttons.
+- Files: `src/FractalFlameCurator/MainWindow.xaml`, `src/FractalFlameCurator/MainWindow.xaml.cs`.
+- Notes: The Image drawer’s render settings still control every rated render; cancellation preserves already-completed replacements. Keyboard P and Esc continue to toggle pause and stop the render session.
+
+### 2026-08-20 - AI rated-dataset rescoring
+- Change: Reduced AI Scoring actions to Start, Stop, Train Model, and Rescore rated. Added a cancellable action that scores complete rated PNG/.flame pairs with the current AI model without renaming, moving, deleting, or changing their human ratings.
+- Files: `src/FractalFlameCurator/MainWindow.xaml`, `src/FractalFlameCurator/MainWindow.xaml.cs`, `src/FractalFlameCurator/Pipeline/ContinuousAiScoringService.cs`, `tests/FractalFlameCurator.Tests/PhaseTwoTests.cs`.
+- Notes: Rated rescoring uses the existing CUDA/DINOv2 backend and leaves the five human-rating folders intact. Pause/Resume remain available internally but are no longer exposed as menu actions.
+
+### 2026-08-20 - Simplified AI training warning
+- Change: Removed the “Do not show the small-data warning again” checkbox and the modal training warning dialog from the AI Scoring drawer workflow.
+- Files: `src/FractalFlameCurator/MainWindow.xaml`, `src/FractalFlameCurator/MainWindow.xaml.cs`.
+- Notes: The persistent small/imbalanced-corpus warning remains visible in the menu and training still proceeds without an extra confirmation dialog.
+
+### 2026-08-20 - Closed dropdown contrast and startup drawer defaults
+- Change: Added an explicit dark ComboBox field template so the selected Oversample and Palette values remain visible in their closed boxes, changed default Gamma to `1` and Black point to `0.85`, and collapsed Image, Dataset Statistics, and Diagnostics drawers at startup.
+- Files: `src/FractalFlameCurator/App.xaml`, `src/FractalFlameCurator/MainWindow.xaml`, `src/FractalFlameCurator/MainWindow.xaml.cs`.
+- Notes: Rendering and AI Scoring remain expanded by default; dropdown popup and tooltip contrast remain dark with light text.
+
+### 2026-08-20 - Palette control alignment
+- Change: Matched the Palette dropdown to the other Image controls by using the same stacked label/input layout, width, spacing, and shared ComboBox style.
+- Files: `src/FractalFlameCurator/MainWindow.xaml`.
+- Notes: Palette names and selection behavior are unchanged.
+
+### 2026-08-20 - Explicit palette labels
+- Change: Replaced the Palette dropdown display-member lookup with an explicit text template so palette names render clearly in both the selected value and popup list.
+- Files: `src/FractalFlameCurator/MainWindow.xaml`.
+- Notes: Palette behavior and the monochrome default are unchanged.
+
+### 2026-08-20 - Dark dropdown and tooltip presentation
+- Change: Set the Image drawer dropdowns and tooltips to a dark background with light text so their contrast remains visible under the WPF theme.
+- Files: `src/FractalFlameCurator/App.xaml`.
+- Notes: Oversample and Palette keep their existing labels and behavior; this change affects presentation only.
+
+### 2026-08-20 - Explicit dropdown contrast and compact drawer layout
+- Change: Replaced the default ComboBox item and ToolTip presentation with explicit black-on-white templates, widened the settings drawer, tightened shared control spacing, and reorganized Rendering and Image settings into denser grids.
+- Files: `src/FractalFlameCurator/App.xaml`, `src/FractalFlameCurator/MainWindow.xaml`.
+- Notes: Font sizes and controls were retained. The Image drawer keeps all settings and actions while reducing vertical space; the left panel can show more content before its vertical scrollbar is needed.
+
+### 2026-08-20 - Compact image actions and rated-flame replacement
+- Change: Fixed Image drawer combo-box text contrast, compacted action rows without reducing font sizes, merged current re-render cancellation into the same toggle button, and added a cancellable batch action for re-rendering all complete rated PNG/.flame pairs.
+- Files: `src/FractalFlameCurator/App.xaml`, `src/FractalFlameCurator/MainWindow.xaml`, `src/FractalFlameCurator/MainWindow.xaml.cs`, `src/FractalFlameCurator/Storage/RatingStore.cs`, `tests/FractalFlameCurator.Tests/PhaseOneTests.cs`.
+- Notes: The batch action replaces rated PNGs in their existing `ratings/1` through `ratings/5` folders, preserves star assignments and source `.flame` files, and does not save selected image settings back into source genomes. The current and batch buttons both switch to cancellation while active.
+
 ### 2026-08-20 - Viewport refresh after render and image replacement
 - Change: Existing candidates now appear immediately when a render session starts, and replaced PNGs are loaded from a fresh stream so re-rendered images refresh reliably in the viewport.
 - Files: `src/FractalFlameCurator/MainWindow.xaml.cs`.

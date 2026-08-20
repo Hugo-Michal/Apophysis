@@ -10,34 +10,154 @@
     <SolidColorBrush x:Key="AccentBrush" Color="#72B7FF" />
     <Style TargetType="TextBlock">
       <Setter Property="Foreground" Value="{StaticResource TextBrush}" />
-      <Setter Property="Margin" Value="0,2,0,2" />
+      <Setter Property="Margin" Value="0,1,0,1" />
     </Style>
     <Style TargetType="Label">
       <Setter Property="Foreground" Value="{StaticResource MutedTextBrush}" />
-      <Setter Property="Margin" Value="0,4,0,0" />
+      <Setter Property="Margin" Value="0,2,0,0" />
     </Style>
     <Style TargetType="Button">
-      <Setter Property="Padding" Value="10,6" />
-      <Setter Property="Margin" Value="3" />
+      <Setter Property="Padding" Value="8,3" />
+      <Setter Property="Margin" Value="2" />
       <Setter Property="Background" Value="#263545" />
       <Setter Property="Foreground" Value="{StaticResource TextBrush}" />
       <Setter Property="BorderBrush" Value="#40566D" />
+      <Style.Triggers>
+        <Trigger Property="IsEnabled" Value="False">
+          <Setter Property="Background" Value="#263545" />
+          <Setter Property="Foreground" Value="{StaticResource MutedTextBrush}" />
+          <Setter Property="BorderBrush" Value="#40566D" />
+          <Setter Property="Opacity" Value="0.55" />
+        </Trigger>
+      </Style.Triggers>
     </Style>
     <Style TargetType="TextBox">
-      <Setter Property="Padding" Value="6,4" />
+      <Setter Property="Padding" Value="6,3" />
       <Setter Property="Background" Value="#10161E" />
       <Setter Property="Foreground" Value="{StaticResource TextBrush}" />
       <Setter Property="BorderBrush" Value="#40566D" />
     </Style>
-    <Style TargetType="ComboBox">
-      <Setter Property="Padding" Value="5,3" />
-      <Setter Property="Margin" Value="0,2,0,2" />
-      <Setter Property="Foreground" Value="Black" />
-      <Setter Property="Background" Value="White" />
+    <Style x:Key="DarkComboBoxItemStyle" TargetType="ComboBoxItem">
+      <Setter Property="Foreground" Value="{StaticResource TextBrush}" />
+      <Setter Property="Background" Value="#263545" />
+      <Setter Property="Padding" Value="6,3" />
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="ComboBoxItem">
+            <Border x:Name="ItemBorder" Background="{TemplateBinding Background}" Padding="{TemplateBinding Padding}">
+              <ContentPresenter Content="{TemplateBinding Content}"
+                                ContentTemplate="{TemplateBinding ContentTemplate}"
+                                ContentStringFormat="{TemplateBinding ContentStringFormat}"
+                                TextElement.Foreground="{TemplateBinding Foreground}" />
+            </Border>
+            <ControlTemplate.Triggers>
+              <Trigger Property="IsHighlighted" Value="True">
+                <Setter TargetName="ItemBorder" Property="Background" Value="#40566D" />
+              </Trigger>
+              <Trigger Property="IsEnabled" Value="False">
+                <Setter TargetName="ItemBorder" Property="Opacity" Value="0.55" />
+              </Trigger>
+            </ControlTemplate.Triggers>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
     </Style>
-    <Style TargetType="ComboBoxItem">
-      <Setter Property="Foreground" Value="Black" />
-      <Setter Property="Background" Value="White" />
+    <Style TargetType="ComboBox">
+      <Setter Property="Padding" Value="5,2" />
+      <Setter Property="Margin" Value="0,1,0,1" />
+      <Setter Property="Foreground" Value="{StaticResource TextBrush}" />
+      <Setter Property="TextElement.Foreground" Value="{StaticResource TextBrush}" />
+      <Setter Property="Background" Value="#18202A" />
+      <Setter Property="BorderBrush" Value="#40566D" />
+      <Setter Property="ItemContainerStyle" Value="{StaticResource DarkComboBoxItemStyle}" />
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="ComboBox">
+            <Grid>
+              <ToggleButton x:Name="ToggleButton"
+                            Focusable="False"
+                            ClickMode="Press"
+                            IsChecked="{Binding IsDropDownOpen, RelativeSource={RelativeSource TemplatedParent}, Mode=TwoWay}"
+                            Background="{TemplateBinding Background}"
+                            BorderBrush="{TemplateBinding BorderBrush}"
+                            BorderThickness="{TemplateBinding BorderThickness}">
+                <ToggleButton.Template>
+                  <ControlTemplate TargetType="ToggleButton">
+                    <Border Background="{TemplateBinding Background}"
+                            BorderBrush="{TemplateBinding BorderBrush}"
+                            BorderThickness="{TemplateBinding BorderThickness}">
+                      <ContentPresenter />
+                    </Border>
+                  </ControlTemplate>
+                </ToggleButton.Template>
+                <Grid>
+                  <ContentPresenter Content="{TemplateBinding SelectionBoxItem}"
+                                    ContentTemplate="{TemplateBinding SelectionBoxItemTemplate}"
+                                    ContentStringFormat="{TemplateBinding SelectionBoxItemStringFormat}"
+                                    HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                    VerticalAlignment="{TemplateBinding VerticalContentAlignment}"
+                                    Margin="{TemplateBinding Padding}"
+                                    TextElement.Foreground="{TemplateBinding Foreground}" />
+                  <Path HorizontalAlignment="Right"
+                        VerticalAlignment="Center"
+                        Margin="0,0,6,0"
+                        Data="M 0 0 L 4 4 L 8 0 Z"
+                        Fill="{TemplateBinding Foreground}" />
+                </Grid>
+              </ToggleButton>
+              <Popup x:Name="PART_Popup"
+                     AllowsTransparency="True"
+                     Focusable="False"
+                     IsOpen="{TemplateBinding IsDropDownOpen}"
+                     Placement="Bottom"
+                     StaysOpen="False">
+                <Grid MinWidth="{Binding ActualWidth, RelativeSource={RelativeSource TemplatedParent}}"
+                      MaxHeight="{TemplateBinding MaxDropDownHeight}">
+                  <Border Background="#263545"
+                          BorderBrush="{TemplateBinding BorderBrush}"
+                          BorderThickness="{TemplateBinding BorderThickness}">
+                    <ScrollViewer CanContentScroll="True" VerticalScrollBarVisibility="Auto">
+                      <ItemsPresenter KeyboardNavigation.DirectionalNavigation="Contained" />
+                    </ScrollViewer>
+                  </Border>
+                </Grid>
+              </Popup>
+            </Grid>
+            <ControlTemplate.Triggers>
+              <Trigger Property="IsEnabled" Value="False">
+                <Setter TargetName="ToggleButton" Property="Opacity" Value="0.55" />
+              </Trigger>
+              <Trigger Property="IsDropDownOpen" Value="True">
+                <Setter TargetName="ToggleButton" Property="BorderBrush" Value="{StaticResource AccentBrush}" />
+              </Trigger>
+            </ControlTemplate.Triggers>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
+    </Style>
+    <Style TargetType="ComboBoxItem" BasedOn="{StaticResource DarkComboBoxItemStyle}" />
+    <Style TargetType="ToolTip">
+      <Setter Property="Foreground" Value="{StaticResource TextBrush}" />
+      <Setter Property="Background" Value="#263545" />
+      <Setter Property="BorderBrush" Value="#40566D" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="Padding" Value="6,4" />
+      <Setter Property="MaxWidth" Value="360" />
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="ToolTip">
+            <Border Background="{TemplateBinding Background}"
+                    BorderBrush="{TemplateBinding BorderBrush}"
+                    BorderThickness="{TemplateBinding BorderThickness}"
+                    Padding="{TemplateBinding Padding}">
+              <ContentPresenter Content="{TemplateBinding Content}"
+                                ContentTemplate="{TemplateBinding ContentTemplate}"
+                                ContentStringFormat="{TemplateBinding ContentStringFormat}"
+                                TextElement.Foreground="{TemplateBinding Foreground}" />
+            </Border>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
     </Style>
   </Application.Resources>
 </Application>
