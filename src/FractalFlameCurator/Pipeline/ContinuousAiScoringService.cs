@@ -174,6 +174,17 @@ public sealed class ContinuousAiScoringService : IAsyncDisposable
 
     public bool TryGetScore(string sourceId, out PreferenceScore score) => _scores.TryGetValue(sourceId, out score!);
 
+    public async Task InvalidateAsync(string sourceId, CancellationToken cancellationToken = default)
+    {
+        await _inferenceGate.WaitAsync(cancellationToken);
+        try
+        {
+            _scores.TryRemove(sourceId, out _);
+            lock (_knownSourceIds) _knownSourceIds.Remove(sourceId);
+        }
+        finally { _inferenceGate.Release(); }
+    }
+
     public async ValueTask DisposeAsync()
     {
         await StopAsync();

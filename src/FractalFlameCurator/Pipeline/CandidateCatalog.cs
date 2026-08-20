@@ -42,6 +42,11 @@ public sealed class CandidateCatalog
         }
     }
 
+    public void ClearScore(string sourceId)
+    {
+        if (_candidates.TryGetValue(sourceId, out var candidate)) _candidates[sourceId] = (candidate.Artifact, null);
+    }
+
     public PreferenceScore? GetScore(RenderedArtifact artifact) => _candidates.TryGetValue(artifact.SourceId, out var value) ? value.Score : null;
 
     public IReadOnlyList<RenderedArtifact> Ordered(bool aiEnabled)

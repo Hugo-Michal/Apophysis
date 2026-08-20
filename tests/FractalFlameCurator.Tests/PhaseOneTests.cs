@@ -89,6 +89,38 @@ public sealed class PhaseOneTests
     }
 
     [Fact]
+    public void ToneMappingUsesDensityRangeAndLowDensityCutoff()
+    {
+        var counts = new[] { 0d, 1d, 4d, 16d };
+        var channels = new double[counts.Length];
+        var pixels = ToneMapper.Map(counts, channels, channels, channels, new RenderSettings
+        {
+            Gamma = 1,
+            Brightness = 1,
+            WhitePoint = 0,
+            BlackPoint = 0.75,
+            ContrastCurve = 1,
+            LowDensityCutoff = 0.3
+        }, monochrome: true);
+
+        Assert.Equal(255, pixels[0]);
+        Assert.Equal(255, pixels[4]);
+        Assert.InRange(pixels[8], (byte)1, (byte)254);
+        Assert.Equal(0, pixels[12]);
+    }
+
+    [Fact]
+    public void HigherContrastCurveSeparatesTheMiddleTone()
+    {
+        var counts = new[] { 0d, 4d, 16d };
+        var channels = new double[counts.Length];
+        var neutral = ToneMapper.Map(counts, channels, channels, channels, new RenderSettings { Gamma = 1, ContrastCurve = 1 }, true);
+        var highContrast = ToneMapper.Map(counts, channels, channels, channels, new RenderSettings { Gamma = 1, ContrastCurve = 2 }, true);
+
+        Assert.True(highContrast[4] < neutral[4]);
+    }
+
+    [Fact]
     public void BackendReportingDoesNotClaimGpu()
     {
         var status = new CpuFlameRenderer().Status;
@@ -178,6 +210,32 @@ public sealed class PhaseOneTests
         finally { Directory.Delete(root, true); }
     }
 
+    [Fact]
+    public async Task RerenderReplacesOnlyTheImageAndPreservesTheSourceFlame()
+    {
+        var root = NewTempDirectory();
+        try
+        {
+            var genome = new FlameGenerator().Generate(901);
+            var archive = new SourceArchive(root);
+            var artifact = archive.Save(genome, new RenderedFrame(4, 4, Enumerable.Repeat((byte)255, 4 * 4 * 4).ToArray()), 1);
+            var originalFlame = File.ReadAllText(artifact.FlamePath);
+            var originalImage = File.ReadAllBytes(artifact.ImagePath);
+
+            await new ArtifactRerenderer(new ReplacementRenderer()).RerenderAsync(
+                artifact,
+                PaletteDefinition.Fire,
+                new RenderSettings { Width = 4, Height = 4, SampleBudget = 100 },
+                null,
+                CancellationToken.None);
+
+            Assert.Equal(originalFlame, File.ReadAllText(artifact.FlamePath));
+            Assert.False(originalImage.SequenceEqual(File.ReadAllBytes(artifact.ImagePath)));
+            Assert.True(SourceArchive.IsCompleteCandidate(artifact.ImagePath));
+        }
+        finally { Directory.Delete(root, true); }
+    }
+
     private static string NewTempDirectory()
     {
         var path = Path.Combine(Path.GetTempPath(), "ffc-tests", Guid.NewGuid().ToString("N"));
@@ -195,6 +253,13 @@ public sealed class PhaseOneTests
     {
         public RendererStatus Status { get; } = new("CPU", "Test CPU", false, "Test renderer");
         public Task<RenderedFrame> RenderAsync(FlameGenome genome, RenderSettings settings, IProgress<RenderProgress>? progress, CancellationToken cancellationToken) => Task.FromResult(new RenderedFrame(32, 32, new byte[32 * 32 * 4]));
+    }
+
+    private sealed class ReplacementRenderer : IFlameRenderer
+    {
+        public RendererStatus Status { get; } = new("CPU", "Test CPU", false, "Test renderer");
+        public Task<RenderedFrame> RenderAsync(FlameGenome genome, RenderSettings settings, IProgress<RenderProgress>? progress, CancellationToken cancellationToken)
+            => Task.FromResult(new RenderedFrame(4, 4, Enumerable.Repeat((byte)0, 4 * 4 * 4).ToArray()));
     }
 
     private sealed class RecordingProgress : IProgress<RenderProgress>

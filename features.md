@@ -14,6 +14,16 @@ Every agent must add the newest entry at the top whenever behavior changes.
 
 ## Current features
 
+### 2026-08-20 - Viewport refresh after render and image replacement
+- Change: Existing candidates now appear immediately when a render session starts, and replaced PNGs are loaded from a fresh stream so re-rendered images refresh reliably in the viewport.
+- Files: `src/FractalFlameCurator/MainWindow.xaml.cs`.
+- Notes: The current image remains visible while background rendering continues; users can rate it or choose Next to inspect another completed candidate.
+
+### 2026-08-20 - Image tone-control drawer and safe current-flame re-render
+- Change: Added an expandable Image settings drawer with palette, sample budget, oversample, filter radius, gamma, brightness, vibrancy, white/black points, contrast curve, and low-density cutoff. Added an explicit current-flame re-render action with cancellation and temporary-file replacement.
+- Files: `src/FractalFlameCurator/MainWindow.xaml`, `src/FractalFlameCurator/MainWindow.xaml.cs`, `src/FractalFlameCurator/Models/FlameGenome.cs`, `src/FractalFlameCurator/Rendering/ToneMapper.cs`, `src/FractalFlameCurator/Rendering/ArtifactRerenderer.cs`, `tests/FractalFlameCurator.Tests/PhaseOneTests.cs`.
+- Notes: Changing Image values does not alter the viewport until Re-render current flame is pressed. Re-rendering preserves the source `.flame` file and replaces the PNG only after a successful render; cancellation/failure leaves the old image in place. Any cached AI score for the changed image is invalidated. Monochrome remains the explicit default.
+
 ### 2026-08-20 - Paired PNG and FLAME candidate storage
 - Change: Rating now moves the rendered PNG and matching `.flame` together, AI rescoring renames both files with the same fixed-width score prefix, and undo/re-rating operate on complete pairs.
 - Files: `src/FractalFlameCurator/Storage/SourceArchive.cs`, `src/FractalFlameCurator/Storage/RatingStore.cs`, `src/FractalFlameCurator/Pipeline/ContinuousAiScoringService.cs`, `src/FractalFlameCurator/MainWindow.xaml.cs`, `tests/FractalFlameCurator.Tests`.

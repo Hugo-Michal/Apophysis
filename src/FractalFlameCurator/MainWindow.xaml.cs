@@ -22,6 +22,7 @@ namespace FractalFlameCurator;
 public partial class MainWindow : Window
 {
     private readonly CpuFlameRenderer _renderer = new();
+    private readonly ArtifactRerenderer _artifactRerenderer;
     private readonly ContinuousRenderService _renderService;
     private readonly DinoV2PreferenceBackend _aiBackend;
     private readonly ContinuousAiScoringService _aiService;
@@ -39,11 +40,14 @@ public partial class MainWindow : Window
     private bool _fitToViewport = true;
     private bool _applyingZoom;
     private bool _closing;
+    private CancellationTokenSource? _rerenderCancellation;
+    private Task? _activeRerender;
     private DateTime _nextUiRefresh;
 
     public MainWindow()
     {
         InitializeComponent();
+        _artifactRerenderer = new ArtifactRerenderer(_renderer);
         _renderService = new ContinuousRenderService(new FlameGenerator(), _renderer);
         _renderService.ImageReady += RenderService_ImageReady;
         _renderService.RenderFailed += RenderService_RenderFailed;
@@ -62,6 +66,10 @@ public partial class MainWindow : Window
         FilterRadiusTextBox.Text = "0.5";
         GammaTextBox.Text = "2.2";
         BrightnessTextBox.Text = "1.0";
+        WhitePointTextBox.Text = "0.0";
+        BlackPointTextBox.Text = "1.0";
+        ContrastCurveTextBox.Text = "1.0";
+        LowDensityCutoffTextBox.Text = "0.01";
         VibrancyTextBox.Text = "1.0";
         PaletteComboBox.ItemsSource = PaletteDefinition.BuiltIns;
         PaletteComboBox.SelectedIndex = 0;
@@ -89,7 +97,7 @@ public partial class MainWindow : Window
         try
         {
             EnsureWorkspace();
-            var palette = (PaletteComboBox.SelectedItem as PaletteDefinition) ?? PaletteDefinition.Monochrome;
+            var renderSettings = ReadImageRenderSettings(out var palette);
             _sessionOptions = new ContinuousRenderOptions
             {
                 OutputDirectory = OutputDirectoryTextBox.Text.Trim(),
@@ -98,27 +106,109 @@ public partial class MainWindow : Window
                 QueueCapacity = ParseInt(QueueCapacityTextBox, 4, 1, 64),
                 Seed = ParseLong(SeedTextBox, DateTime.UtcNow.Ticks),
                 Palette = palette,
-                RenderSettings = new RenderSettings
-                {
-                    Width = 2048,
-                    Height = 2048,
-                    SampleBudget = ParseInt(SampleBudgetTextBox, 20_000_000, 100, 500_000_000),
-                    Oversample = ParseInt((OversampleComboBox.SelectedItem as ComboBoxItem)?.Content?.ToString(), 1, 1, 3),
-                    FilterRadius = ParseDouble(FilterRadiusTextBox, 0.5, 0, 3),
-                    Gamma = ParseDouble(GammaTextBox, 2.2, 0.1, 8),
-                    Brightness = ParseDouble(BrightnessTextBox, 1, 0.05, 5),
-                    Vibrancy = ParseDouble(VibrancyTextBox, 1, 0, 1),
-                    PaletteName = palette.Name
-                }
+                RenderSettings = renderSettings
             };
             _renderService.Start(_sessionOptions);
             RefreshCandidates();
-            EmptyPreviewTextBlock.Visibility = Visibility.Collapsed;
+            if (_current is null) ShowNextReady();
+            else EmptyPreviewTextBlock.Visibility = Visibility.Collapsed;
         }
         catch (Exception exception)
         {
             WpfMessageBox.Show(this, exception.Message, "Could not start rendering", MessageBoxButton.OK, MessageBoxImage.Error);
         }
+    }
+
+    private async void RerenderCurrent_Click(object sender, RoutedEventArgs e)
+    {
+        if (_activeRerender is not null) return;
+        _activeRerender = RerenderCurrentAsync();
+        try { await _activeRerender; }
+        catch (Exception exception) { ImageSettingsStatusTextBlock.Text = $"Re-render failed: {exception.Message}"; }
+        finally { _activeRerender = null; }
+    }
+
+    private async Task RerenderCurrentAsync()
+    {
+        if (_current is null)
+        {
+            ImageSettingsStatusTextBlock.Text = "Select an unrated source image before re-rendering.";
+            return;
+        }
+
+        if (_aiService.Status.IsRunning)
+        {
+            ImageSettingsStatusTextBlock.Text = "Stop AI scoring before re-rendering so its score cannot race the image replacement.";
+            return;
+        }
+
+        EnsureWorkspace();
+        if (_ratingStore?.FindRating(_current.ImagePath) is not null)
+        {
+            ImageSettingsStatusTextBlock.Text = "Rated images are protected. Undo the rating before re-rendering.";
+            return;
+        }
+
+        var artifact = ResolveCurrentArtifact();
+        var settings = ReadImageRenderSettings(out var palette);
+        using var cancellation = new CancellationTokenSource();
+        _rerenderCancellation = cancellation;
+        RerenderCurrentButton.IsEnabled = false;
+        CancelRerenderButton.IsEnabled = true;
+        ImageSettingsStatusTextBlock.Text = "Re-rendering current flame…";
+        try
+        {
+            var progress = new Progress<RenderProgress>(update =>
+            {
+                ImageSettingsStatusTextBlock.Text = $"Re-rendering current flame… {update.CompletedSamples:N0}/{update.TotalSamples:N0} points";
+            });
+            await _artifactRerenderer.RerenderAsync(artifact, palette, settings, progress, cancellation.Token);
+            await _aiService.InvalidateAsync(artifact.SourceId);
+            _catalog.ClearScore(artifact.SourceId);
+            RefreshCandidates();
+            ShowArtifact(artifact);
+            ImageSettingsStatusTextBlock.Text = "Current viewport updated. The source .flame file was preserved.";
+        }
+        catch (OperationCanceledException) when (cancellation.IsCancellationRequested)
+        {
+            ImageSettingsStatusTextBlock.Text = "Re-render cancelled. The existing image was preserved.";
+        }
+        catch (Exception exception)
+        {
+            ImageSettingsStatusTextBlock.Text = $"Re-render failed: {exception.Message}";
+        }
+        finally
+        {
+            if (ReferenceEquals(_rerenderCancellation, cancellation)) _rerenderCancellation = null;
+            RerenderCurrentButton.IsEnabled = true;
+            CancelRerenderButton.IsEnabled = false;
+        }
+    }
+
+    private void CancelRerender_Click(object sender, RoutedEventArgs e) => _rerenderCancellation?.Cancel();
+
+    private RenderSettings ReadImageRenderSettings(out PaletteDefinition palette)
+    {
+        palette = (PaletteComboBox.SelectedItem as PaletteDefinition) ?? PaletteDefinition.Monochrome;
+        var whitePoint = ParseDouble(WhitePointTextBox, 0, 0, 1);
+        var blackPoint = ParseDouble(BlackPointTextBox, 1, 0, 1);
+        if (blackPoint <= whitePoint) throw new InvalidOperationException("Black point must be greater than white point.");
+        return new RenderSettings
+        {
+            Width = 2048,
+            Height = 2048,
+            SampleBudget = ParseInt(SampleBudgetTextBox, 20_000_000, 100, 500_000_000),
+            Oversample = ParseInt((OversampleComboBox.SelectedItem as ComboBoxItem)?.Content?.ToString(), 1, 1, 3),
+            FilterRadius = ParseDouble(FilterRadiusTextBox, 0.5, 0, 3),
+            Gamma = ParseDouble(GammaTextBox, 2.2, 0.1, 8),
+            Brightness = ParseDouble(BrightnessTextBox, 1, 0.05, 5),
+            Vibrancy = ParseDouble(VibrancyTextBox, 1, 0, 1),
+            WhitePoint = whitePoint,
+            BlackPoint = blackPoint,
+            ContrastCurve = ParseDouble(ContrastCurveTextBox, 1, 0.1, 8),
+            LowDensityCutoff = ParseDouble(LowDensityCutoffTextBox, 0.01, 0, 1),
+            PaletteName = palette.Name
+        };
     }
 
     private void Pause_Click(object sender, RoutedEventArgs e) => _renderService.Pause();
@@ -201,8 +291,11 @@ public partial class MainWindow : Window
             var bitmap = new System.Windows.Media.Imaging.BitmapImage();
             bitmap.BeginInit();
             bitmap.CacheOption = System.Windows.Media.Imaging.BitmapCacheOption.OnLoad;
-            bitmap.UriSource = new Uri(artifact.ImagePath, UriKind.Absolute);
-            bitmap.EndInit();
+            using (var stream = File.Open(artifact.ImagePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
+            {
+                bitmap.StreamSource = stream;
+                bitmap.EndInit();
+            }
             bitmap.Freeze();
             _current = artifact;
             PreviewImage.Source = bitmap;
@@ -351,6 +444,11 @@ public partial class MainWindow : Window
         e.Cancel = true;
         _closing = true;
         CompositionTarget.Rendering -= UpdateStatus;
+        _rerenderCancellation?.Cancel();
+        if (_activeRerender is not null)
+        {
+            try { await _activeRerender; } catch (Exception) { }
+        }
         await _renderService.StopAsync();
         await _aiService.DisposeAsync();
         Close();

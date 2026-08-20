@@ -177,6 +177,10 @@ public sealed record RenderSettings
     public double Brightness { get; init; } = 1;
     public double Gamma { get; init; } = 2.2;
     public double Vibrancy { get; init; } = 1;
+    public double WhitePoint { get; init; } = 0;
+    public double BlackPoint { get; init; } = 1;
+    public double ContrastCurve { get; init; } = 1;
+    public double LowDensityCutoff { get; init; } = 0.01;
     public string PaletteName { get; init; } = PaletteDefinition.Monochrome.Name;
 }
 

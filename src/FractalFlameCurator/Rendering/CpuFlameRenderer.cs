@@ -142,7 +142,7 @@ public sealed class CpuFlameRenderer : IFlameRenderer
         progress?.Report(new RenderProgress(sampleBudget, sampleBudget));
         cancellationToken.ThrowIfCancellationRequested();
 
-        var internalPixels = ToneMap(counts, reds, greens, blues, settings, genome.GammaThreshold, string.Equals(genome.Palette.Name, PaletteDefinition.Monochrome.Name, StringComparison.OrdinalIgnoreCase));
+        var internalPixels = ToneMapper.Map(counts, reds, greens, blues, settings, string.Equals(genome.Palette.Name, PaletteDefinition.Monochrome.Name, StringComparison.OrdinalIgnoreCase));
         return new RenderedFrame(width, height, Downsample(internalPixels, internalWidth, internalHeight, width, height, oversample, settings.FilterRadius));
     }
 
@@ -163,42 +163,6 @@ public sealed class CpuFlameRenderer : IFlameRenderer
         var index = Array.BinarySearch(cumulativeWeights, value);
         if (index < 0) index = ~index;
         return Math.Clamp(index, 0, cumulativeWeights.Length - 1);
-    }
-
-    private static byte[] ToneMap(double[] counts, double[] reds, double[] greens, double[] blues, RenderSettings settings, double threshold, bool monochrome)
-    {
-        var maxLog = 0d;
-        foreach (var count in counts) maxLog = Math.Max(maxLog, LogOnePlus(count));
-        var pixels = new byte[counts.Length * 4];
-        var gamma = Math.Clamp(settings.Gamma, 0.1, 8);
-        var brightness = Math.Clamp(settings.Brightness, 0.05, 5);
-        var vibrancy = Math.Clamp(settings.Vibrancy, 0, 1);
-        for (var i = 0; i < counts.Length; i++)
-        {
-            var density = maxLog <= 0 ? 0 : LogOnePlus(counts[i]) / maxLog;
-            if (density < threshold * 0.01) density = 0;
-            var tone = Math.Clamp(Math.Pow(Math.Clamp(density * brightness, 0, 1), 1 / gamma), 0, 1);
-            var averageR = counts[i] == 0 ? 0 : reds[i] / counts[i];
-            var averageG = counts[i] == 0 ? 0 : greens[i] / counts[i];
-            var averageB = counts[i] == 0 ? 0 : blues[i] / counts[i];
-            var luminance = (averageR * 0.2126 + averageG * 0.7152 + averageB * 0.0722);
-            var offset = i * 4;
-            if (monochrome)
-            {
-                var ink = (byte)Math.Clamp(255 * (1 - tone), 0, 255);
-                pixels[offset] = ink;
-                pixels[offset + 1] = ink;
-                pixels[offset + 2] = ink;
-            }
-            else
-            {
-                pixels[offset] = (byte)Math.Clamp(255 - tone * (255 - (averageB * vibrancy + luminance * (1 - vibrancy))), 0, 255);
-                pixels[offset + 1] = (byte)Math.Clamp(255 - tone * (255 - (averageG * vibrancy + luminance * (1 - vibrancy))), 0, 255);
-                pixels[offset + 2] = (byte)Math.Clamp(255 - tone * (255 - (averageR * vibrancy + luminance * (1 - vibrancy))), 0, 255);
-            }
-            pixels[offset + 3] = 255;
-        }
-        return pixels;
     }
 
     private static byte[] Downsample(byte[] source, int sourceWidth, int sourceHeight, int width, int height, int oversample, double filterRadius)
@@ -311,5 +275,4 @@ public sealed class CpuFlameRenderer : IFlameRenderer
         return ((x * c1 + y * c2) / denominator, (x * c2 - y * c1) / denominator);
     }
 
-    private static double LogOnePlus(double value) => Math.Log(1 + value);
 }

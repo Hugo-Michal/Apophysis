@@ -40,6 +40,9 @@ The application must:
 - Keep each rated PNG and `.flame` together in its rating folder. Unrated source
   pairs remain in `rendered/`; the rating folders contain only matched PNG and
   `.flame` pairs, with no other metadata.
+- Provide an expandable Image settings drawer with truthful palette, quality,
+  tone, and density controls. Apply changes to the current viewport only through
+  an explicit cancellable re-render that preserves the source `.flame` pair.
 
 ## Phase 1 acceptance checks
 
@@ -89,8 +92,9 @@ The Phase 1 implementation is in `src/FractalFlameCurator` as a WPF/.NET 8
 desktop application. Its automated acceptance coverage is in
 `tests/FractalFlameCurator.Tests`; the tests cover XML validity, deterministic
 seed output, variation coverage, CPU backend reporting, renderer cancellation
-and failure handling, queue bounds, finite-session completion, paired
-rating-folder behavior, undo/re-rating, and source-pair preservation. Phase 2
+and failure handling, queue bounds, finite-session completion, paired rating-folder
+behavior, undo/re-rating, source-pair preservation, tone mapping, and safe
+current-flame re-render. Phase 2
 AI scoring is implemented separately after the Phase 1 manual workflow; see the Phase 2 implementation note below.
 
 ## Phase 2 implementation note
