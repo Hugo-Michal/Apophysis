@@ -14,6 +14,11 @@ Every agent must add the newest entry at the top whenever behavior changes.
 
 ## Current features
 
+### 2026-08-20 - Rated dataset and existing-render AI rescoring
+- Change: Rated rescoring now processes every rated PNG, including legacy PNG-only entries, updates the fixed-width score prefix, and renames a matching `.flame` together with its image when available. Starting AI scoring clears the prior candidate-suppression cache so existing rendered files are rescored on every new session.
+- Files: `src/FractalFlameCurator/Storage/RatingStore.cs`, `src/FractalFlameCurator/Pipeline/ContinuousAiScoringService.cs`, `src/FractalFlameCurator/MainWindow.xaml`, `src/FractalFlameCurator/MainWindow.xaml.cs`, `tests/FractalFlameCurator.Tests/PhaseTwoTests.cs`.
+- Notes: Rating folders are preserved; rescoring changes only score prefixes and never deletes or moves an image between rating folders. Unpaired legacy PNGs remain unpaired.
+
 ### 2026-08-20 - Disabled render-toggle contrast
 - Change: Added an explicit dark disabled-button style so the Pause/Resume render toggle remains gray and readable instead of switching to the WPF white disabled appearance.
 - Files: `src/FractalFlameCurator/App.xaml`.

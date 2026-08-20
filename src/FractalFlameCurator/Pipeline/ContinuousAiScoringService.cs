@@ -77,6 +77,7 @@ public sealed class ContinuousAiScoringService : IAsyncDisposable
             _completed = 0;
             _total = 0;
             _pendingCount = 0;
+            lock (_knownSourceIds) _knownSourceIds.Clear();
             _watcher = new FileSystemWatcher(_renderedDirectory, "*.png") { NotifyFilter = NotifyFilters.FileName | NotifyFilters.Size | NotifyFilters.LastWrite, EnableRaisingEvents = true };
             _watcher.Created += RenderedFileChanged;
             _watcher.Changed += RenderedFileChanged;
@@ -175,14 +176,11 @@ public sealed class ContinuousAiScoringService : IAsyncDisposable
     public async Task<int> RescoreRatedAsync(RatingStore ratings, CancellationToken cancellationToken = default)
     {
         if (!_backend.Diagnostics.AiReady) throw new InvalidOperationException("AI scoring is disabled. CUDA and a usable PyTorch DINOv2 runtime are required.");
-        var paths = ratings.EnumerateRatedArtifacts()
-            .Select(artifact => artifact.ImagePath)
-            .Where(SourceArchive.IsCompleteCandidate)
-            .ToArray();
-        if (paths.Length == 0) return 0;
-        Interlocked.Add(ref _total, paths.Length);
-        await ScorePathsAsync(paths, cancellationToken, renamePairs: false);
-        return paths.Length;
+        var paths = ratings.EnumerateRatedImagePaths();
+        if (paths.Count == 0) return 0;
+        Interlocked.Add(ref _total, paths.Count);
+        await ScorePathsAsync(paths, cancellationToken, allowUnpairedImages: true);
+        return paths.Count;
     }
 
     public bool TryGetScore(string sourceId, out PreferenceScore score) => _scores.TryGetValue(sourceId, out score!);
@@ -245,17 +243,17 @@ public sealed class ContinuousAiScoringService : IAsyncDisposable
         }
     }
 
-    private async Task ScorePathsAsync(IReadOnlyList<string> paths, CancellationToken cancellationToken, bool renamePairs = true)
+    private async Task ScorePathsAsync(IReadOnlyList<string> paths, CancellationToken cancellationToken, bool allowUnpairedImages = false)
     {
         await _inferenceGate.WaitAsync(cancellationToken);
         try
         {
-            var existing = paths.Where(path => SourceArchive.IsCompleteCandidate(path)).ToArray();
+            var existing = paths.Where(path => allowUnpairedImages ? File.Exists(path) : SourceArchive.IsCompleteCandidate(path)).ToArray();
             if (existing.Length == 0) return;
             var scores = await _backend.ScoreAsync(existing, cancellationToken);
             foreach (var score in scores)
             {
-                var renamedPath = renamePairs ? RenameRenderedPair(score.ImagePath, score.Score) : score.ImagePath;
+                var renamedPath = RenameScoredPair(score.ImagePath, score.Score, allowUnpairedImages);
                 var finalScore = score with { ImagePath = renamedPath };
                 _scores[finalScore.SourceId] = finalScore;
                 _knownSourceIds.Add(finalScore.SourceId);
@@ -294,32 +292,34 @@ public sealed class ContinuousAiScoringService : IAsyncDisposable
         throw new FileNotFoundException("The rendered image did not become a complete candidate.", path);
     }
 
-    private string RenameRenderedPair(string imagePath, double score)
+    private string RenameScoredPair(string imagePath, double score, bool allowUnpairedImage)
     {
         var directory = Path.GetDirectoryName(imagePath) ?? _renderedDirectory;
-        var flamePath = SourceArchive.FindMatchingFlamePath(imagePath)
-            ?? throw new FileNotFoundException("The matching .flame source is not available.", imagePath);
+        var flamePath = SourceArchive.FindMatchingFlamePath(imagePath);
+        if (flamePath is null && !allowUnpairedImage) throw new FileNotFoundException("The matching .flame source is not available.", imagePath);
         var destinationImagePath = Path.Combine(directory, CandidateFileNaming.WithScorePrefix(Path.GetFileName(imagePath), score));
-        var destinationFlamePath = Path.Combine(directory, CandidateFileNaming.WithScorePrefix(Path.GetFileName(flamePath), score));
+        var destinationFlamePath = flamePath is null
+            ? null
+            : Path.Combine(directory, CandidateFileNaming.WithScorePrefix(Path.GetFileName(flamePath), score));
         if (string.Equals(imagePath, destinationImagePath, StringComparison.OrdinalIgnoreCase)
-            && string.Equals(flamePath, destinationFlamePath, StringComparison.OrdinalIgnoreCase)) return imagePath;
+            && (flamePath is null || string.Equals(flamePath, destinationFlamePath, StringComparison.OrdinalIgnoreCase))) return imagePath;
         var token = Guid.NewGuid().ToString("N");
         var temporaryImagePath = imagePath + ".scoring-" + token + ".tmp";
-        var temporaryFlamePath = flamePath + ".scoring-" + token + ".tmp";
+        var temporaryFlamePath = flamePath is null ? null : flamePath + ".scoring-" + token + ".tmp";
         File.Move(imagePath, temporaryImagePath);
         try
         {
-            File.Move(flamePath, temporaryFlamePath);
+            if (flamePath is not null) File.Move(flamePath, temporaryFlamePath!);
             try
             {
                 File.Move(temporaryImagePath, destinationImagePath, true);
-                File.Move(temporaryFlamePath, destinationFlamePath, true);
+                if (temporaryFlamePath is not null) File.Move(temporaryFlamePath, destinationFlamePath!, true);
                 return destinationImagePath;
             }
             catch
             {
                 if (File.Exists(temporaryImagePath) && !File.Exists(imagePath)) File.Move(temporaryImagePath, imagePath);
-                if (File.Exists(temporaryFlamePath) && !File.Exists(flamePath)) File.Move(temporaryFlamePath, flamePath);
+                if (temporaryFlamePath is not null && File.Exists(temporaryFlamePath) && !File.Exists(flamePath)) File.Move(temporaryFlamePath, flamePath!);
                 throw;
             }
         }

@@ -139,7 +139,7 @@ public sealed class PhaseTwoTests
     }
 
     [Fact]
-    public async Task RatedDatasetCanBeRescoredWithoutMovingOrRenamingFiles()
+    public async Task RatedDatasetRescoreUpdatesPrefixesAndIncludesPngOnlyImages()
     {
         var root = NewTempDirectory();
         try
@@ -151,18 +151,53 @@ public sealed class PhaseTwoTests
             var ratedImagePath = Path.Combine(root, "ratings", "3", rated.SourceId + ".png");
             var ratedFlamePath = Path.Combine(root, "ratings", "3", rated.SourceId + ".flame");
             var beforeFlame = File.ReadAllText(ratedFlamePath);
+            var unpairedImagePath = Path.Combine(root, "ratings", "5", "legacy-style.png");
+            BlankFrame().SavePng(unpairedImagePath);
 
             await using var service = new ContinuousAiScoringService(new FakeBackend(0.74, "model-one"));
             await service.InitializeAsync();
             var count = await service.RescoreRatedAsync(ratings);
 
-            Assert.Equal(1, count);
-            Assert.True(File.Exists(ratedImagePath));
-            Assert.True(File.Exists(ratedFlamePath));
-            Assert.Equal(beforeFlame, File.ReadAllText(ratedFlamePath));
-            Assert.Equal(ratedImagePath, service.Scores[rated.SourceId].ImagePath);
+            var rescoredImagePath = Path.Combine(root, "ratings", "3", "074000__" + rated.SourceId + ".png");
+            var rescoredFlamePath = Path.Combine(root, "ratings", "3", "074000__" + rated.SourceId + ".flame");
+            var rescoredUnpairedImagePath = Path.Combine(root, "ratings", "5", "074000__legacy-style.png");
+            Assert.Equal(2, count);
+            Assert.False(File.Exists(ratedImagePath));
+            Assert.False(File.Exists(ratedFlamePath));
+            Assert.True(File.Exists(rescoredImagePath));
+            Assert.True(File.Exists(rescoredFlamePath));
+            Assert.True(File.Exists(rescoredUnpairedImagePath));
+            Assert.Equal(beforeFlame, File.ReadAllText(rescoredFlamePath));
+            Assert.Equal(rescoredImagePath, service.Scores[rated.SourceId].ImagePath);
+            Assert.Equal(rescoredUnpairedImagePath, service.Scores["legacy-style"].ImagePath);
             Assert.Equal(0.74, service.Scores[rated.SourceId].Score, 6);
-            Assert.True(ratings.RatingFoldersContainPairedFiles());
+            Assert.Equal(3, ratings.FindRating(rescoredImagePath));
+            Assert.Equal(5, ratings.FindRating(rescoredUnpairedImagePath));
+            Assert.Equal(2, ratings.EnumerateRatedImagePaths().Count);
+        }
+        finally { Directory.Delete(root, true); }
+    }
+
+    [Fact]
+    public async Task StartingAiScoringAgainRescansExistingRenderedFiles()
+    {
+        var root = NewTempDirectory();
+        try
+        {
+            var archive = new SourceArchive(root);
+            var candidate = archive.Save(new Generation.FlameGenerator().Generate(32), BlankFrame(), 1);
+            var ratings = new RatingStore(root);
+            await using var service = new ContinuousAiScoringService(new FakeBackend(0.63, "model-one"));
+            await service.InitializeAsync();
+            service.Start(root, ratings);
+            await WaitUntil(() => service.Status.Completed >= 1);
+            await service.StopAsync();
+
+            service.Start(root, ratings);
+            await WaitUntil(() => service.Status.Completed >= 1);
+
+            Assert.True(File.Exists(Path.Combine(root, "rendered", "063000__" + candidate.SourceId + ".png")));
+            Assert.Equal(candidate.SourceId, service.Scores[candidate.SourceId].SourceId);
         }
         finally { Directory.Delete(root, true); }
     }

@@ -107,7 +107,7 @@
                 <Button Content="Start AI scoring" Click="StartAi_Click" />
                 <Button Content="Stop AI scoring" Click="StopAi_Click" />
                 <Button Content="Train Model" Click="TrainModel_Click" />
-                <Button x:Name="RescoreRatedDatasetButton" Content="Rescore rated" Click="RescoreRatedDataset_Click" ToolTip="Score all images in ratings/1–5 with the current AI model without moving, deleting, or changing their ratings" />
+                <Button x:Name="RescoreRatedDatasetButton" Content="Rescore rated" Click="RescoreRatedDataset_Click" ToolTip="Score all PNG images in ratings/1–5 and update their score prefixes without changing rating folders" />
               </WrapPanel>
               <TextBlock x:Name="TrainingWarningTextBlock" Foreground="#F4B860" TextWrapping="Wrap" />
               <TextBlock x:Name="AiStatusTextBlock" Foreground="{StaticResource MutedTextBrush}" TextWrapping="Wrap" />

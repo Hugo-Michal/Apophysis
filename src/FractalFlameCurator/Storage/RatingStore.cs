@@ -75,6 +75,14 @@ public sealed class RatingStore
 
     public int RatedImageCount() => Enumerable.Range(1, 5).SelectMany(rating => Directory.EnumerateFiles(GetRatingDirectory(rating), "*.png", SearchOption.TopDirectoryOnly)).Select(Path.GetFileName).Distinct(StringComparer.OrdinalIgnoreCase).Count();
 
+    public IReadOnlyList<string> EnumerateRatedImagePaths()
+    {
+        return Enumerable.Range(1, 5)
+            .SelectMany(rating => Directory.EnumerateFiles(GetRatingDirectory(rating), "*.png", SearchOption.TopDirectoryOnly))
+            .OrderBy(path => path, StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+    }
+
     public IReadOnlyList<RenderedArtifact> EnumerateRatedArtifacts()
     {
         return Enumerable.Range(1, 5)

@@ -375,26 +375,26 @@ public partial class MainWindow : Window
             return;
         }
 
-        var ratedCount = _ratingStore!.EnumerateRatedArtifacts().Count;
+        var ratedCount = _ratingStore!.EnumerateRatedImagePaths().Count;
         if (ratedCount == 0)
         {
-            AiStatusTextBlock.Text = "There are no complete rated PNG/.flame pairs to rescore.";
+            AiStatusTextBlock.Text = "There are no rated PNG images to rescore.";
             return;
         }
 
         using var cancellation = new CancellationTokenSource();
         _ratedRescoreCancellation = cancellation;
         RescoreRatedDatasetButton.Content = "Cancel rescore";
-        TrainingMetricsTextBlock.Text = $"Rescoring {ratedCount} rated image(s)… ratings and files will remain unchanged.";
+        TrainingMetricsTextBlock.Text = $"Rescoring {ratedCount} rated image(s)… rating folders will be preserved.";
         try
         {
             var rescored = await _aiService.RescoreRatedAsync(_ratingStore, cancellation.Token);
             UpdateCurrentText();
-            TrainingMetricsTextBlock.Text = $"Rescored {rescored} rated image(s). Ratings and PNG/.flame files were unchanged.";
+            TrainingMetricsTextBlock.Text = $"Rescored {rescored} rated image(s). Rating folders were preserved; score prefixes were updated.";
         }
         catch (OperationCanceledException) when (cancellation.IsCancellationRequested)
         {
-            TrainingMetricsTextBlock.Text = "Rated dataset rescore cancelled. Ratings and PNG/.flame files were unchanged.";
+            TrainingMetricsTextBlock.Text = "Rated dataset rescore cancelled. Existing rating folders were preserved.";
         }
         finally
         {
