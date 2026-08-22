@@ -6,3 +6,6 @@ ratings/
 *.user
 *.suo
 **/__pycache__/
+
+# Research and manuscript material is maintained only on the Manuscript branch.
+/research/
