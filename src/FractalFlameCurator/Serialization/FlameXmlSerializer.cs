@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Text;
 using System.Xml;
 using System.Xml.Linq;
 using FractalFlameCurator.Generation;
@@ -9,11 +10,12 @@ namespace FractalFlameCurator.Serialization;
 public static class FlameXmlSerializer
 {
     private static readonly CultureInfo Invariant = CultureInfo.InvariantCulture;
+    private static readonly Encoding Utf8NoBom = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false);
 
     public static string Serialize(FlameGenome genome)
     {
         FlameValidator.ThrowIfInvalid(genome);
-        var settings = new XmlWriterSettings { Indent = true, OmitXmlDeclaration = false, NewLineChars = "\n", NewLineHandling = NewLineHandling.Replace };
+        var settings = new XmlWriterSettings { Indent = true, OmitXmlDeclaration = true, NewLineChars = "\n", NewLineHandling = NewLineHandling.Replace };
         using var stringWriter = new StringWriter(Invariant);
         using (var writer = XmlWriter.Create(stringWriter, settings))
         {
@@ -30,13 +32,13 @@ public static class FlameXmlSerializer
             WriteAttribute(writer, "symmetry", genome.Symmetry);
             WriteAttribute(writer, "oversample", genome.Oversample);
             WriteAttribute(writer, "filter", genome.FilterRadius);
-            WriteAttribute(writer, "quality", genome.Quality);
+            WriteAttribute(writer, "quality", ToApophysisSampleDensity(genome));
             WriteAttribute(writer, "background", "1 1 1");
             WriteAttribute(writer, "brightness", genome.Brightness);
             WriteAttribute(writer, "gamma", genome.Gamma);
             WriteAttribute(writer, "gamma_threshold", genome.GammaThreshold);
             WriteAttribute(writer, "vibrancy", genome.Vibrancy);
-            WriteAttribute(writer, "hue", genome.Hue);
+            WriteAttribute(writer, "hue_rotation", genome.Hue);
 
             foreach (var transform in genome.Transforms)
             {
@@ -62,7 +64,7 @@ public static class FlameXmlSerializer
     public static void Save(FlameGenome genome, string path)
     {
         Directory.CreateDirectory(Path.GetDirectoryName(path) ?? ".");
-        File.WriteAllText(path, Serialize(genome));
+        File.WriteAllText(path, Serialize(genome), Utf8NoBom);
     }
 
     public static FlameGenome Deserialize(string xml)
@@ -71,12 +73,15 @@ public static class FlameXmlSerializer
         var flame = document.Root?.Element("flame") ?? throw new InvalidDataException("The .flame document has no flame element.");
         var size = ReadPair(flame.Attribute("size")?.Value, (2048, 2048));
         var center = ReadPair(flame.Attribute("center")?.Value, (0d, 0d));
+        var width = (int)size.Item1;
+        var height = (int)size.Item2;
+        var sampleDensity = Double(flame, "quality", 5);
         var genome = new FlameGenome
         {
             Name = String(flame, "name", "flame"),
             Seed = Long(flame, "seed", 0),
-            Width = (int)size.Item1,
-            Height = (int)size.Item2,
+            Width = width,
+            Height = height,
             CenterX = center.Item1,
             CenterY = center.Item2,
             Scale = Double(flame, "scale", 100),
@@ -84,12 +89,12 @@ public static class FlameXmlSerializer
             Symmetry = (int)Double(flame, "symmetry", 0),
             Oversample = (int)Double(flame, "oversample", 1),
             FilterRadius = Double(flame, "filter", 0.5),
-            Quality = (int)Double(flame, "quality", 20_000_000),
+            Quality = ToSampleBudget(sampleDensity, width, height),
             Brightness = Double(flame, "brightness", 1),
             Gamma = Double(flame, "gamma", 2.2),
             GammaThreshold = Double(flame, "gamma_threshold", 0.01),
             Vibrancy = Double(flame, "vibrancy", 1),
-            Hue = Double(flame, "hue", 0)
+            Hue = Double(flame, "hue_rotation", Double(flame, "hue", 0))
         };
 
         foreach (var element in flame.Elements().Where(e => e.Name.LocalName is "xform" or "finalxform"))
@@ -112,15 +117,10 @@ public static class FlameXmlSerializer
         WriteAttribute(writer, "weight", transform.Weight);
         WriteAttribute(writer, "color", transform.Color);
         WriteAttribute(writer, "symmetry", transform.Symmetry);
-        WriteAttribute(writer, "a", transform.A);
-        WriteAttribute(writer, "b", transform.B);
-        WriteAttribute(writer, "c", transform.C);
-        WriteAttribute(writer, "d", transform.D);
-        WriteAttribute(writer, "e", transform.E);
-        WriteAttribute(writer, "f", transform.F);
+        WriteAttribute(writer, "coefs", $"{F(transform.A)} {F(transform.B)} {F(transform.C)} {F(transform.D)} {F(transform.E)} {F(transform.F)}");
         foreach (var pair in VariationRegistry.All.Select(d => d.Name).Where(transform.Variations.ContainsKey))
         {
-            WriteAttribute(writer, $"var_{pair}", transform.Variations[pair]);
+            WriteAttribute(writer, pair, transform.Variations[pair]);
         }
         if (transform.PostTransform is { } post)
         {
@@ -131,21 +131,24 @@ public static class FlameXmlSerializer
 
     private static FlameTransform ReadTransform(XElement element)
     {
+        var coefs = ReadSix(element.Attribute("coefs")?.Value);
         var transform = new FlameTransform
         {
             Weight = Double(element, "weight", 1),
             Color = Double(element, "color", 0),
             Symmetry = Double(element, "symmetry", 1),
-            A = Double(element, "a", 1),
-            B = Double(element, "b", 0),
-            C = Double(element, "c", 0),
-            D = Double(element, "d", 1),
-            E = Double(element, "e", 0),
-            F = Double(element, "f", 0)
+            A = coefs?[0] ?? Double(element, "a", 1),
+            B = coefs?[1] ?? Double(element, "b", 0),
+            C = coefs?[2] ?? Double(element, "c", 0),
+            D = coefs?[3] ?? Double(element, "d", 1),
+            E = coefs?[4] ?? Double(element, "e", 0),
+            F = coefs?[5] ?? Double(element, "f", 0)
         };
-        foreach (var attribute in element.Attributes().Where(a => a.Name.LocalName.StartsWith("var_", StringComparison.OrdinalIgnoreCase)))
+        foreach (var attribute in element.Attributes())
         {
-            var name = attribute.Name.LocalName[4..];
+            var name = attribute.Name.LocalName.StartsWith("var_", StringComparison.OrdinalIgnoreCase)
+                ? attribute.Name.LocalName[4..]
+                : attribute.Name.LocalName;
             if (VariationRegistry.Names.Contains(name)) transform.Variations[name] = ParseDouble(attribute.Value, 0);
         }
         var postParts = element.Attribute("post")?.Value.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
@@ -162,6 +165,28 @@ public static class FlameXmlSerializer
     {
         var parts = value?.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
         return parts is { Length: 2 } ? (ParseDouble(parts[0], fallback.Item1), ParseDouble(parts[1], fallback.Item2)) : fallback;
+    }
+
+    private static double[]? ReadSix(string? value)
+    {
+        var parts = value?.Split([' ', '\t', '\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        return parts is { Length: 6 } && parts.All(part => double.TryParse(part, NumberStyles.Float, Invariant, out _))
+            ? parts.Select(part => ParseDouble(part, 0)).ToArray()
+            : null;
+    }
+
+    private static double ToApophysisSampleDensity(FlameGenome genome)
+    {
+        var pixelCount = (double)genome.Width * genome.Height;
+        return Math.Max(0.1, genome.Quality / pixelCount);
+    }
+
+    private static int ToSampleBudget(double sampleDensity, int width, int height)
+    {
+        var totalSamples = sampleDensity * width * (double)height;
+        return double.IsFinite(totalSamples)
+            ? (int)Math.Clamp(Math.Round(totalSamples), 100, int.MaxValue)
+            : 20_000_000;
     }
 
     private static string String(XElement element, string name, string fallback) => element.Attribute(name)?.Value ?? fallback;

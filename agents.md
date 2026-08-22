@@ -98,7 +98,9 @@ desktop application. Its automated acceptance coverage is in
 seed output, variation coverage, CPU backend reporting, renderer cancellation
 and failure handling, queue bounds, finite-session completion, paired rating-folder
 behavior, undo/re-rating, source-pair preservation, tone mapping, and safe
-current-flame re-render. Phase 2
+current-flame re-render. The serialization coverage also verifies on-disk
+UTF-8 loading, native Apophysis affine/variation attributes, quality mapping,
+and backward compatibility with the previously emitted attributes. Phase 2
 AI scoring is implemented separately after the Phase 1 manual workflow; see the Phase 2 implementation note below.
 
 ## Phase 2 implementation note

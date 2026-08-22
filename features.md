@@ -14,6 +14,11 @@ Every agent must add the newest entry at the top whenever behavior changes.
 
 ## Current features
 
+### 2026-08-20 - Apophysis-compatible flame serialization
+- Change: Corrected saved `.flame` files to use declaration-free UTF-8 XML, native `coefs` affine attributes, direct variation attributes, `hue_rotation`, and Apophysis samples-per-pixel quality derived from the curator's total sample budget.
+- Files: `src/FractalFlameCurator/Serialization/FlameXmlSerializer.cs`, `tests/FractalFlameCurator.Tests/PhaseOneTests.cs`.
+- Notes: The reader remains backward-compatible with the previously emitted `a`–`f` and `var_*` attributes, while new files follow the Apophysis 7X/AV-compatible dialect. The curator's internal sample budget remains unchanged.
+
 ### 2026-08-20 - Rated dataset and existing-render AI rescoring
 - Change: Rated rescoring now processes every rated PNG, including legacy PNG-only entries, updates the fixed-width score prefix, and renames a matching `.flame` together with its image when available. Starting AI scoring clears the prior candidate-suppression cache so existing rendered files are rescored on every new session.
 - Files: `src/FractalFlameCurator/Storage/RatingStore.cs`, `src/FractalFlameCurator/Pipeline/ContinuousAiScoringService.cs`, `src/FractalFlameCurator/MainWindow.xaml`, `src/FractalFlameCurator/MainWindow.xaml.cs`, `tests/FractalFlameCurator.Tests/PhaseTwoTests.cs`.

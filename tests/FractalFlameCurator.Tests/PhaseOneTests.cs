@@ -1,3 +1,4 @@
+using System.Text;
 using System.Xml.Linq;
 using FractalFlameCurator.Generation;
 using FractalFlameCurator.Models;
@@ -24,6 +25,61 @@ public sealed class PhaseOneTests
         Assert.Equal(genome.Seed, roundTrip.Seed);
         Assert.Equal(genome.Transforms.Count, roundTrip.Transforms.Count);
         Assert.Equal(genome.Transforms.SelectMany(t => t.Variations.Keys).OrderBy(x => x), roundTrip.Transforms.SelectMany(t => t.Variations.Keys).OrderBy(x => x));
+    }
+
+    [Fact]
+    public void SavedFlameUsesApophysisFileEncodingAndAttributeNames()
+    {
+        var root = NewTempDirectory();
+        try
+        {
+            var genome = new FlameGenerator().Generate(12345);
+            var path = Path.Combine(root, "candidate.flame");
+            FlameXmlSerializer.Save(genome, path);
+
+            var bytes = File.ReadAllBytes(path);
+            Assert.NotEmpty(bytes);
+            Assert.Equal((byte)'<', bytes[0]);
+            Assert.StartsWith("<flames>", File.ReadAllText(path, Encoding.UTF8));
+
+            var document = XDocument.Load(path);
+            var flame = document.Root!.Element("flame")!;
+            Assert.Equal("Apophysis 7X", flame.Attribute("version")!.Value);
+            Assert.Equal("4.76837158203125", flame.Attribute("quality")!.Value);
+            var transforms = flame.Elements("xform").ToArray();
+            Assert.NotEmpty(transforms);
+            Assert.All(transforms, transform =>
+            {
+                Assert.NotNull(transform.Attribute("coefs"));
+                Assert.Null(transform.Attribute("a"));
+                Assert.DoesNotContain(transform.Attributes(), attribute => attribute.Name.LocalName.StartsWith("var_", StringComparison.OrdinalIgnoreCase));
+            });
+        }
+        finally { Directory.Delete(root, true); }
+    }
+
+    [Fact]
+    public void DeserializerStillReadsPreviouslyGeneratedLegacyAttributes()
+    {
+        var genome = new FlameGenerator().Generate(6789);
+        var document = XDocument.Parse(FlameXmlSerializer.Serialize(genome));
+        foreach (var transform in document.Root!.Element("flame")!.Elements("xform"))
+        {
+            var coefs = transform.Attribute("coefs")!.Value.Split(' ');
+            transform.Attribute("coefs")!.Remove();
+            var coefficientNames = new[] { "a", "b", "c", "d", "e", "f" };
+            for (var i = 0; i < coefficientNames.Length; i++) transform.SetAttributeValue(coefficientNames[i], coefs[i]);
+            foreach (var variation in transform.Attributes().Where(attribute => VariationRegistry.Names.Contains(attribute.Name.LocalName)).ToArray())
+            {
+                var value = variation.Value;
+                variation.Remove();
+                transform.SetAttributeValue("var_" + variation.Name.LocalName, value);
+            }
+        }
+
+        var roundTrip = FlameXmlSerializer.Deserialize(document.ToString(SaveOptions.DisableFormatting));
+        Assert.Equal(genome.Transforms.Select(transform => transform.A).ToArray(), roundTrip.Transforms.Select(transform => transform.A).ToArray());
+        Assert.Equal(genome.Transforms.SelectMany(transform => transform.Variations.Keys).OrderBy(name => name), roundTrip.Transforms.SelectMany(transform => transform.Variations.Keys).OrderBy(name => name));
     }
 
     [Fact]
