@@ -9,3 +9,8 @@ ratings/
 
 # Research and manuscript material is maintained only on the Manuscript branch.
 /research/
+
+# Generated release, verification, document, and scratch output.
+/artifacts/
+/output/
+/tmp/
