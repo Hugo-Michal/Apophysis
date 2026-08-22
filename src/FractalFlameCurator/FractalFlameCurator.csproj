@@ -9,6 +9,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <AssemblyName>FractalFlameCurator</AssemblyName>
     <RootNamespace>FractalFlameCurator</RootNamespace>
+    <Version>1.2.0</Version>
   </PropertyGroup>
   <ItemGroup>
     <Content Include="Ai\dinov2_service.py" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />

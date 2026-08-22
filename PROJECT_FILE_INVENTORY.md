@@ -1,8 +1,9 @@
 # Project file inventory
 
-Reviewed 2026-08-22. No project files or user images were deleted. “Runtime”
-below means required to build the application from source; a published end-user
-copy needs only the published app files and `Ai/dinov2_service.py`.
+Reviewed 2026-08-22 after the approved cleanup and release verification.
+“Runtime” below means required to build the application from source; a
+published end-user copy needs only the published app files and
+`Ai/dinov2_service.py`.
 
 ## Runtime flow
 
@@ -21,7 +22,7 @@ copy needs only the published app files and `Ai/dinov2_service.py`.
 |---|---:|---|
 | `FractalFlameCurator.sln` | Build | Solution entry point for app and tests. Keep. |
 | `global.json` | Build | Pins .NET SDK 8.0.424. Keep while that version is supported. |
-| `src/FractalFlameCurator/FractalFlameCurator.csproj` | Build | WPF project definition and Python-worker publishing rule. Keep. |
+| `src/FractalFlameCurator/FractalFlameCurator.csproj` | Build | WPF project definition, release version, and Python-worker publishing rule. Keep. |
 | `src/FractalFlameCurator/App.xaml` | Runtime source | Shared WPF theme/control templates. Keep. |
 | `src/FractalFlameCurator/App.xaml.cs` | Runtime source | WPF application type required by XAML compilation. Keep even though it is intentionally small. |
 | `src/FractalFlameCurator/MainWindow.xaml` | Runtime source | Main native UI layout and event bindings. Keep. |
@@ -42,25 +43,18 @@ copy needs only the published app files and `Ai/dinov2_service.py`.
 | `README.md` | Development/user help | Build, architecture, renderer, and AI overview. Keep. |
 | `.gitignore` | Development | Excludes generated SDK, build, release, scratch, data, and cache files. Keep. |
 | `.gitattributes` | Development | Repository text normalization. Keep. |
-| `docs/user-manual/native-fractal-flame-curator-user-manual.pdf` | Optional documentation | User-facing manual; not required by the executable. Keep if releases include documentation. |
-| `docs/user-manual/app-main-clean.png` | Optional documentation | Source screenshot used by the manual. Keep only if the manual will be rebuilt. |
-| `docs/user-manual/build_manual.py` | Optional documentation | Manual-generation script. Keep only if maintaining the PDF from source. |
-| `scripts/download_google_fractals.ps1` | Not used by app | Research-corpus downloader; no project/runtime references. Candidate to move to the `Manuscript` branch or remove from this application branch. |
-| `scripts/download_web_fractals.ps1` | Not used by app | Wikimedia research-corpus downloader. Same recommendation. |
-| `scripts/top_up_google_fractals.ps1` | Not used by app | Research-corpus top-up script. Same recommendation. |
-| `scripts/normalize_fractals.py` | Not used by app | Research-image normalizer requiring NumPy/Pillow. Same recommendation. |
+| `native-fractal-flame-curator-user-manual.pdf` | Optional documentation | User-facing manual included in releases; not required to build or run the executable. |
 
 ## Ignored/generated folders
 
 | Path | Current size / files | Required? | Recommendation |
 |---|---:|---:|---|
-| `.tooling/` | 713.84 MB / 5,141 | Build-only on this machine | Contains the local .NET 8.0.424 SDK because no system SDK is installed. Keep until a system SDK is available; then it is reproducible and removable. |
 | `src/FractalFlameCurator/bin/` | 169.92 MB / 476 | No | Build/publish outputs. Safe to regenerate with `dotnet build`/`publish`; candidate for cleanup. |
 | `src/FractalFlameCurator/obj/` | 10.93 MB / 74 | No | Intermediate compiler output. Safe to regenerate; candidate for cleanup. |
 | `tests/FractalFlameCurator.Tests/bin/` | 9.79 MB / 188 | No | Test output. Safe to regenerate; candidate for cleanup. |
 | `tests/FractalFlameCurator.Tests/obj/` | 0.41 MB / 37 | No | Test intermediate output. Safe to regenerate; candidate for cleanup. |
 | `src/FractalFlameCurator/Ai/__pycache__/` | 0.02 MB / 1 | No | Python bytecode cache. Safe to regenerate; candidate for cleanup. |
-| `artifacts/releases/` | 218.97 MB / 4 | Distribution-only | Contains both the unpacked v1.1.0 app and its ZIP, so it deliberately duplicates release bytes. Preserve externally if this is the canonical release backup; otherwise removable from the working copy. |
+| `artifacts/releases/` | Generated | Distribution-only | Contains unpacked self-contained apps and ZIP archives prepared for GitHub Releases. Safe to remove locally after upload and checksum verification. |
 | `artifacts/verification/` | 4.91 MB / 93 | No | One-off test/publish verification output. Safe to regenerate; candidate for cleanup. |
 | `tmp/` | 4.48 MB / 44 | No | Rendered manual pages and extracted research text. Scratch output; candidate for cleanup. |
 | `output/` | empty | No | Empty generated-output folder; candidate for cleanup. |
@@ -71,7 +65,5 @@ copy needs only the published app files and `Ai/dinov2_service.py`.
 | Item | Evidence | Decision |
 |---|---|---|
 | Generator transform-count range | Validation supports 2–12 transforms, but the seeded generator currently produces 2–5. Expanding it directly would change every affected seed and break cross-version reproducibility. | Keep the stable generator or introduce a versioned generator before expanding the range. |
-| Research scripts on the app branch | The four `scripts/` files are not referenced by the solution and write into the ignored `research/` tree. | Keep as convenience tools, move to `Manuscript`, or delete in a later approved cleanup. |
 | Existing user corpus integrity | `C:\Users\Hugo\Documents\ApophysisCurator` currently has 1,099 rated PNGs but 996 rated `.flame` files, so 103 legacy images are unpaired. The application data is outside this repository and was not changed. | Preserve legacy PNG-only ratings or run a separately approved repair/archive pass. |
 | Idle AI memory | Startup diagnostics leaves the Python/PyTorch worker waiting with about 338 MB resident memory, but the measured worker and WPF process use 0 sustained CPU while idle. | Keep fast AI readiness, or redesign diagnostics as a short-lived process if memory—not CPU—is a concern. |
-
