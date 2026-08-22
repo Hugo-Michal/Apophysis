@@ -62,10 +62,6 @@ public static class CandidateFileNaming
         return false;
     }
 
-    public static IReadOnlyList<string> SortDescending(IEnumerable<string> fileNames) => fileNames
-        .OrderByDescending(fileName => TryParseScore(fileName, out var score) ? score : -1)
-        .ThenBy(fileName => GetSourceId(fileName), StringComparer.OrdinalIgnoreCase)
-        .ToArray();
 }
 
 public sealed record DatasetImage(string ImagePath, int Rating, string SourceId);

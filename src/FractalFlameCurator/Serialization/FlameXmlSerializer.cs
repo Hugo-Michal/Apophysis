@@ -76,6 +76,11 @@ public static class FlameXmlSerializer
         var width = (int)size.Item1;
         var height = (int)size.Item2;
         var sampleDensity = Double(flame, "quality", 5);
+        var usesLegacyTransformAttributes = flame.Elements()
+            .Where(element => element.Name.LocalName is "xform" or "finalxform")
+            .Any(element => element.Attribute("coefs") is null
+                            && (element.Attribute("a") is not null
+                                || element.Attributes().Any(attribute => attribute.Name.LocalName.StartsWith("var_", StringComparison.OrdinalIgnoreCase))));
         var genome = new FlameGenome
         {
             Name = String(flame, "name", "flame"),
@@ -89,7 +94,7 @@ public static class FlameXmlSerializer
             Symmetry = (int)Double(flame, "symmetry", 0),
             Oversample = (int)Double(flame, "oversample", 1),
             FilterRadius = Double(flame, "filter", 0.5),
-            Quality = ToSampleBudget(sampleDensity, width, height),
+            Quality = usesLegacyTransformAttributes ? ToLegacySampleBudget(sampleDensity) : ToSampleBudget(sampleDensity, width, height),
             Brightness = Double(flame, "brightness", 1),
             Gamma = Double(flame, "gamma", 2.2),
             GammaThreshold = Double(flame, "gamma_threshold", 0.01),
@@ -186,6 +191,13 @@ public static class FlameXmlSerializer
         var totalSamples = sampleDensity * width * (double)height;
         return double.IsFinite(totalSamples)
             ? (int)Math.Clamp(Math.Round(totalSamples), 100, int.MaxValue)
+            : 20_000_000;
+    }
+
+    private static int ToLegacySampleBudget(double quality)
+    {
+        return double.IsFinite(quality)
+            ? (int)Math.Clamp(Math.Round(quality), 100, int.MaxValue)
             : 20_000_000;
     }
 

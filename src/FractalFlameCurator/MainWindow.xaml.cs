@@ -3,6 +3,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
+using System.Windows.Threading;
 using FractalFlameCurator.Ai;
 using FractalFlameCurator.Generation;
 using FractalFlameCurator.Models;
@@ -27,7 +28,6 @@ public partial class MainWindow : Window
     private readonly DinoV2PreferenceBackend _aiBackend;
     private readonly ContinuousAiScoringService _aiService;
     private readonly CandidateCatalog _catalog = new();
-    private ContinuousRenderOptions? _sessionOptions;
     private SourceArchive? _archive;
     private RatingStore? _ratingStore;
     private RenderedArtifact? _current;
@@ -47,7 +47,7 @@ public partial class MainWindow : Window
     private Task? _activeRatedRerender;
     private CancellationTokenSource? _ratedRescoreCancellation;
     private Task? _activeRatedRescore;
-    private DateTime _nextUiRefresh;
+    private readonly DispatcherTimer _statusTimer;
 
     public MainWindow()
     {
@@ -80,7 +80,9 @@ public partial class MainWindow : Window
         PaletteComboBox.SelectedIndex = 0;
         BackendTextBlock.Text = $"Renderer: {_renderer.Status.Backend} · {_renderer.Status.Device}\n{_renderer.Status.Detail}";
         AiStatusTextBlock.Text = "AI diagnostics are loading…";
-        CompositionTarget.Rendering += UpdateStatus;
+        _statusTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(250) };
+        _statusTimer.Tick += UpdateStatus;
+        _statusTimer.Start();
         Loaded += MainWindow_Loaded;
     }
 
@@ -111,7 +113,7 @@ public partial class MainWindow : Window
         {
             EnsureWorkspace();
             var renderSettings = ReadImageRenderSettings(out var palette);
-            _sessionOptions = new ContinuousRenderOptions
+            var sessionOptions = new ContinuousRenderOptions
             {
                 OutputDirectory = OutputDirectoryTextBox.Text.Trim(),
                 BatchLimit = ParseInt(BatchLimitTextBox, 100, 1, 1_000_000),
@@ -121,9 +123,8 @@ public partial class MainWindow : Window
                 Palette = palette,
                 RenderSettings = renderSettings
             };
-            _renderService.Start(_sessionOptions);
+            _renderService.Start(sessionOptions);
             UpdateRenderActionButtons();
-            RefreshCandidates();
             if (_current is null) ShowNextReady();
             else EmptyPreviewTextBlock.Visibility = Visibility.Collapsed;
         }
@@ -182,7 +183,7 @@ public partial class MainWindow : Window
         ImageSettingsStatusTextBlock.Text = "Re-rendering current flame…";
         try
         {
-            var progress = new Progress<RenderProgress>(update =>
+            var progress = new ThrottledRenderProgress(Dispatcher, update =>
             {
                 ImageSettingsStatusTextBlock.Text = $"Re-rendering current flame… {update.CompletedSamples:N0}/{update.TotalSamples:N0} points";
             });
@@ -267,10 +268,10 @@ public partial class MainWindow : Window
                 {
                     ImageSettingsStatusTextBlock.Text = $"Re-rendering rated flames… {completed}/{artifacts.Count} using {workerCount} workers";
                 });
-                var progress = new Progress<RenderProgress>(update => Dispatcher.Invoke(() =>
+                var progress = new ThrottledRenderProgress(Dispatcher, update =>
                 {
                     ImageSettingsStatusTextBlock.Text = $"Re-rendering rated flames… {completed}/{artifacts.Count} using {workerCount} workers · {update.CompletedSamples:N0}/{update.TotalSamples:N0} points";
-                }));
+                });
                 await _artifactRerenderer.RerenderAsync(artifact, palette, settings, progress, token);
                 var finished = Interlocked.Increment(ref completed);
                 Dispatcher.Invoke(() => ImageSettingsStatusTextBlock.Text = $"Re-rendering rated flames… {finished}/{artifacts.Count} using {workerCount} workers");
@@ -510,6 +511,7 @@ public partial class MainWindow : Window
             var current = ResolveCurrentArtifact();
             _ratingStore.Rate(current.ImagePath, rating);
             _lastRated = current;
+            RefreshWorkspaceStatistics();
             ShowNextReady();
         }
         catch (Exception exception) { WpfMessageBox.Show(this, exception.Message, "Could not save rating", MessageBoxButton.OK, MessageBoxImage.Error); }
@@ -523,6 +525,7 @@ public partial class MainWindow : Window
         _deferredAfterUndo = _current;
         ShowArtifact(_lastRated);
         _lastRated = null;
+        RefreshWorkspaceStatistics();
     }
 
     private void ZoomFit_Click(object sender, RoutedEventArgs e) { _fitToViewport = true; ApplyFitZoom(); }
@@ -590,19 +593,11 @@ public partial class MainWindow : Window
     {
         var status = _renderService.Status;
         UpdateRenderActionButtons();
-        QueueTextBlock.Text = $"Queue: {status.QueueDepth}/{_sessionOptions?.QueueCapacity ?? 0} · ready {status.ReadyCount}\nCompleted: {status.Completed} · failures: {status.Failed}";
+        QueueTextBlock.Text = $"Queue: {status.QueueDepth}/{status.QueueCapacity} · ready {status.ReadyCount}\nCompleted: {status.Completed} · failures: {status.Failed}";
         var sampleProgress = status.ActiveSampleBudget > 0 ? $" · samples {status.ActiveSamples:N0}/{status.ActiveSampleBudget:N0}" : string.Empty;
         SessionTextBlock.Text = status.IsRunning ? $"Session: {(status.IsPaused ? "PAUSED" : "RUNNING")} · {status.Elapsed:hh\\:mm\\:ss} · limit {status.BatchLimit}{sampleProgress}" : "Session: idle";
         var ai = _aiService.Status;
-        AiStatusTextBlock.Text = $"AI: {(ai.IsRunning ? (ai.IsPaused ? "PAUSED" : "RUNNING") : "idle")} · pending {ai.PendingImages} · scored {ai.ScoredImages} · progress {ai.Completed}/{ai.Total}\nModel: {ai.ModelVersion ?? "not trained"} · device {ai.Diagnostics.ActiveDevice}";
-        RatingCountTextBlock.Text = _ratingStore is null ? "Rated: 0" : $"Rated: {_ratingStore.RatedImageCount()} · PNG/.flame pairs: {_ratingStore.RatingFoldersContainPairedFiles()}";
-        if (DateTime.UtcNow >= _nextUiRefresh)
-        {
-            _nextUiRefresh = DateTime.UtcNow.AddMilliseconds(500);
-            RefreshCandidates();
-            if (_ratingStore is not null) UpdateDatasetStatistics(PreferenceDatasetBuilder.Snapshot(_ratingStore.RootDirectory).Statistics);
-            UpdateCurrentText();
-        }
+        AiStatusTextBlock.Text = $"AI: {(ai.IsRunning ? (ai.IsPaused ? "PAUSED" : "RUNNING") : "idle")} · pending {ai.PendingImages} · scored {ai.ScoredImages} · failures {ai.Failed} · progress {ai.Completed}/{ai.Total}\nModel: {ai.ModelVersion ?? "not trained"} · device {ai.Diagnostics.ActiveDevice}";
     }
 
     private async void Window_Closing(object? sender, System.ComponentModel.CancelEventArgs e)
@@ -610,7 +605,8 @@ public partial class MainWindow : Window
         if (_closing) return;
         e.Cancel = true;
         _closing = true;
-        CompositionTarget.Rendering -= UpdateStatus;
+        _statusTimer.Stop();
+        _statusTimer.Tick -= UpdateStatus;
         _rerenderCancellation?.Cancel();
         _ratedRerenderCancellation?.Cancel();
         _ratedRescoreCancellation?.Cancel();
@@ -626,7 +622,7 @@ public partial class MainWindow : Window
         {
             try { await _activeRatedRescore; } catch (Exception) { }
         }
-        await _renderService.StopAsync();
+        await _renderService.DisposeAsync();
         await _aiService.DisposeAsync();
         Close();
     }
@@ -634,15 +630,32 @@ public partial class MainWindow : Window
     private void EnsureWorkspace()
     {
         var output = Path.GetFullPath(OutputDirectoryTextBox.Text.Trim());
-        _archive = new SourceArchive(output);
-        _ratingStore = new RatingStore(output);
+        if (_archive is null || _ratingStore is null || !string.Equals(_archive.RootDirectory, output, StringComparison.OrdinalIgnoreCase))
+        {
+            _archive = new SourceArchive(output);
+            _ratingStore = new RatingStore(output);
+        }
         RefreshCandidates();
+        RefreshWorkspaceStatistics();
     }
 
     private void RefreshCandidates()
     {
         if (_archive is null || _ratingStore is null) return;
         _catalog.Refresh(_archive, _ratingStore);
+    }
+
+    private void RefreshWorkspaceStatistics()
+    {
+        if (_ratingStore is null)
+        {
+            RatingCountTextBlock.Text = "Rated: 0";
+            return;
+        }
+
+        var statistics = PreferenceDatasetBuilder.Snapshot(_ratingStore.RootDirectory).Statistics;
+        RatingCountTextBlock.Text = $"Rated: {statistics.Total} · PNG/.flame pairs: {_ratingStore.RatingFoldersContainPairedFiles()}";
+        UpdateDatasetStatistics(statistics);
     }
 
     private RenderedArtifact ResolveCurrentArtifact()
@@ -664,7 +677,7 @@ public partial class MainWindow : Window
 
     private void UpdateAiDiagnostics(DeviceDiagnostics diagnostics)
     {
-        AiDiagnosticsTextBlock.Text = $"PyTorch: {diagnostics.PyTorchVersion} · CUDA: {(diagnostics.CudaAvailable ? "available" : "unavailable")}\nGPU: {diagnostics.GpuName} · active device: {diagnostics.ActiveDevice}\n{diagnostics.Detail}";
+        AiDiagnosticsTextBlock.Text = $"Python: {(diagnostics.PythonAvailable ? "available" : "unavailable")} · PyTorch: {diagnostics.PyTorchVersion} · CUDA: {(diagnostics.CudaAvailable ? "available" : "unavailable")}\nGPU: {diagnostics.GpuName} · active device: {diagnostics.ActiveDevice}\n{diagnostics.Detail}";
         AiStatusTextBlock.Text = diagnostics.AiReady ? "AI is ready; train a model to begin preference scoring." : "AI scoring/training disabled; manual rendering and rating remain available.";
     }
 
@@ -724,4 +737,21 @@ public partial class MainWindow : Window
     private static int ParseInt(string? value, int fallback, int minimum, int maximum) => int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsed) ? Math.Clamp(parsed, minimum, maximum) : fallback;
     private static long ParseLong(WpfTextBox box, long fallback) => long.TryParse(box.Text, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsed) ? parsed : fallback;
     private static double ParseDouble(WpfTextBox box, double fallback, double minimum, double maximum) => double.TryParse(box.Text, NumberStyles.Float, CultureInfo.InvariantCulture, out var parsed) ? Math.Clamp(parsed, minimum, maximum) : fallback;
+
+    private sealed class ThrottledRenderProgress(Dispatcher dispatcher, Action<RenderProgress> report) : IProgress<RenderProgress>
+    {
+        private readonly object _gate = new();
+        private long _nextUpdate;
+
+        public void Report(RenderProgress value)
+        {
+            lock (_gate)
+            {
+                var now = Environment.TickCount64;
+                if (value.CompletedSamples < value.TotalSamples && now < _nextUpdate) return;
+                _nextUpdate = now + 250;
+            }
+            dispatcher.BeginInvoke(DispatcherPriority.Background, new Action(() => report(value)));
+        }
+    }
 }

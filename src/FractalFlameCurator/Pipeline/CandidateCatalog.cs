@@ -9,8 +9,11 @@ public sealed class CandidateCatalog
 
     public void Refresh(SourceArchive archive, RatingStore ratings)
     {
+        var ratedSourceIds = ratings.EnumerateRatedImagePaths()
+            .Select(path => CandidateFileNaming.GetSourceId(Path.GetFileName(path)))
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
         var current = archive.EnumerateArtifacts()
-            .Where(artifact => ratings.FindRating(artifact.ImagePath) is null)
+            .Where(artifact => !ratedSourceIds.Contains(artifact.SourceId))
             .GroupBy(artifact => artifact.SourceId, StringComparer.OrdinalIgnoreCase)
             .Select(group => group
                 .OrderByDescending(artifact => File.GetLastWriteTimeUtc(artifact.ImagePath))

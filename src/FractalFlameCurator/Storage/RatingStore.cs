@@ -40,7 +40,7 @@ public sealed class RatingStore
     public bool Undo()
     {
         if (_history.Count == 0) return false;
-        var action = _history.Pop();
+        var action = _history.Peek();
         var currentImagePath = FindRatingImage(action.ImagePath);
         if (currentImagePath is null) return false;
         var currentFlamePath = SourceArchive.FindMatchingFlamePath(currentImagePath)
@@ -59,6 +59,7 @@ public sealed class RatingStore
             action.PreviousRating is { } previousRatingForFlame
                 ? Path.Combine(GetRatingDirectory(previousRatingForFlame), Path.GetFileNameWithoutExtension(CandidateFileNaming.RemoveScorePrefix(Path.GetFileName(action.ImagePath))) + ".flame")
                 : action.FlamePath);
+        _history.Pop();
         return true;
     }
 
@@ -72,8 +73,6 @@ public sealed class RatingStore
         }
         return null;
     }
-
-    public int RatedImageCount() => Enumerable.Range(1, 5).SelectMany(rating => Directory.EnumerateFiles(GetRatingDirectory(rating), "*.png", SearchOption.TopDirectoryOnly)).Select(Path.GetFileName).Distinct(StringComparer.OrdinalIgnoreCase).Count();
 
     public IReadOnlyList<string> EnumerateRatedImagePaths()
     {
@@ -99,12 +98,19 @@ public sealed class RatingStore
 
     public bool RatingFoldersContainPairedFiles()
     {
-        var files = Enumerable.Range(1, 5).SelectMany(rating => Directory.EnumerateFiles(GetRatingDirectory(rating), "*", SearchOption.TopDirectoryOnly)).ToArray();
-        var images = files.Where(path => string.Equals(Path.GetExtension(path), ".png", StringComparison.OrdinalIgnoreCase)).ToArray();
-        var flames = files.Where(path => string.Equals(Path.GetExtension(path), ".flame", StringComparison.OrdinalIgnoreCase)).ToArray();
-        return files.All(path => string.Equals(Path.GetExtension(path), ".png", StringComparison.OrdinalIgnoreCase) || string.Equals(Path.GetExtension(path), ".flame", StringComparison.OrdinalIgnoreCase))
-            && images.All(image => flames.Any(flame => string.Equals(CandidateFileNaming.GetSourceId(Path.GetFileName(image)), CandidateFileNaming.GetSourceId(Path.GetFileName(flame)), StringComparison.OrdinalIgnoreCase)))
-            && flames.All(flame => images.Any(image => string.Equals(CandidateFileNaming.GetSourceId(Path.GetFileName(image)), CandidateFileNaming.GetSourceId(Path.GetFileName(flame)), StringComparison.OrdinalIgnoreCase)));
+        for (var rating = 1; rating <= 5; rating++)
+        {
+            var files = Directory.EnumerateFiles(GetRatingDirectory(rating), "*", SearchOption.TopDirectoryOnly).ToArray();
+            if (files.Any(path => !string.Equals(Path.GetExtension(path), ".png", StringComparison.OrdinalIgnoreCase)
+                                  && !string.Equals(Path.GetExtension(path), ".flame", StringComparison.OrdinalIgnoreCase))) return false;
+
+            var images = files.Where(path => string.Equals(Path.GetExtension(path), ".png", StringComparison.OrdinalIgnoreCase)).ToArray();
+            var flames = files.Where(path => string.Equals(Path.GetExtension(path), ".flame", StringComparison.OrdinalIgnoreCase)).ToArray();
+            var imageSourceIds = images.Select(path => CandidateFileNaming.GetSourceId(Path.GetFileName(path))).ToHashSet(StringComparer.OrdinalIgnoreCase);
+            var flameSourceIds = flames.Select(path => CandidateFileNaming.GetSourceId(Path.GetFileName(path))).ToHashSet(StringComparer.OrdinalIgnoreCase);
+            if (imageSourceIds.Count != images.Length || flameSourceIds.Count != flames.Length || !imageSourceIds.SetEquals(flameSourceIds)) return false;
+        }
+        return true;
     }
 
     private string GetRatingDirectory(int rating) => Path.Combine(RatingsDirectory, rating.ToString());
@@ -144,6 +150,8 @@ public sealed class RatingStore
         var token = Guid.NewGuid().ToString("N");
         var temporaryImagePath = sourceImagePath + ".rating-" + token + ".tmp";
         var temporaryFlamePath = sourceFlamePath + ".rating-" + token + ".tmp";
+        var imagePublished = false;
+        var flamePublished = false;
         File.Move(sourceImagePath, temporaryImagePath);
         try
         {
@@ -153,12 +161,16 @@ public sealed class RatingStore
                 if (File.Exists(destinationImagePath)) File.Delete(destinationImagePath);
                 if (File.Exists(destinationFlamePath)) File.Delete(destinationFlamePath);
                 File.Move(temporaryImagePath, destinationImagePath);
+                imagePublished = true;
                 File.Move(temporaryFlamePath, destinationFlamePath);
+                flamePublished = true;
             }
             catch
             {
-                if (File.Exists(temporaryImagePath) && !File.Exists(sourceImagePath)) File.Move(temporaryImagePath, sourceImagePath);
-                if (File.Exists(temporaryFlamePath) && !File.Exists(sourceFlamePath)) File.Move(temporaryFlamePath, sourceFlamePath);
+                if (imagePublished && File.Exists(destinationImagePath) && !File.Exists(sourceImagePath)) File.Move(destinationImagePath, sourceImagePath);
+                else if (File.Exists(temporaryImagePath) && !File.Exists(sourceImagePath)) File.Move(temporaryImagePath, sourceImagePath);
+                if (flamePublished && File.Exists(destinationFlamePath) && !File.Exists(sourceFlamePath)) File.Move(destinationFlamePath, sourceFlamePath);
+                else if (File.Exists(temporaryFlamePath) && !File.Exists(sourceFlamePath)) File.Move(temporaryFlamePath, sourceFlamePath);
                 throw;
             }
         }

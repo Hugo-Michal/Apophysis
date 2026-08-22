@@ -27,14 +27,16 @@ under the stable, score-free basename; undo moves the pair back when needed.
   parameters, and exposes the complete variation registry sampled by the
   generator.
 - `Serialization` reads and writes deterministic Apophysis 7X-style XML,
-  including `seed`, affine coefficients, `var_*` weights, post transforms, and
-  a 256-color palette.
+  including `seed`, native affine coefficients and variation weights, post/final
+  transforms, and a 256-color palette. Previously emitted `a`–`f`, `var_*`, and
+  total-sample quality values remain readable.
 - `Rendering` contains the built-in deterministic CPU flame renderer. It uses
   a bounded managed worker pool at the session layer and reports CPU honestly;
   it does not claim GPU support.
 - `Pipeline` provides a bounded producer queue, pause/resume/stop cancellation,
   batch limits, completion/failure counts, and a ready-image queue so rating
-  does not stop rendering. The independent AI scoring service watches complete
+  does not stop rendering. Pause also gates CPU sampling inside an active render.
+  The independent AI scoring service watches complete
   rendered PNG/`.flame` pairs, preserves low-scoring candidates, and renames
   only rendered candidates with fixed-width score prefixes.
 - `Ai` snapshots the five human rating folders, creates stable-source grouped

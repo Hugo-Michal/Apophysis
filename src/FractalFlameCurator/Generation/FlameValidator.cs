@@ -18,19 +18,10 @@ public static class FlameValidator
         var totalWeight = 0d;
         foreach (var transform in genome.Transforms)
         {
-            if (!IsFinite(transform.Weight) || transform.Weight <= 0) errors.Add("Transform weights must be finite and positive.");
+            ValidateTransform(transform, errors, requirePositiveWeight: true);
             totalWeight += transform.Weight;
-            if (!IsFinite(transform.A) || !IsFinite(transform.B) || !IsFinite(transform.C) || !IsFinite(transform.D) || !IsFinite(transform.E) || !IsFinite(transform.F))
-                errors.Add("Affine coefficients must be finite.");
-            if (Math.Abs(transform.A * transform.D - transform.B * transform.C) < 0.01) errors.Add("An affine transform is numerically singular.");
-            if (new[] { transform.A, transform.B, transform.C, transform.D, transform.E, transform.F }.Any(v => Math.Abs(v) > 3.5)) errors.Add("Affine coefficients exceed the safe bound.");
-            if (transform.Variations.Count == 0 || transform.Variations.All(pair => pair.Value <= 0)) errors.Add("Every transform needs a positive variation.");
-            foreach (var pair in transform.Variations)
-            {
-                if (!VariationRegistry.Names.Contains(pair.Key)) errors.Add($"Unknown variation '{pair.Key}'.");
-                if (!IsFinite(pair.Value) || pair.Value < 0 || pair.Value > 2) errors.Add($"Variation weight '{pair.Key}' is outside the safe range.");
-            }
         }
+        if (genome.FinalTransform is not null) ValidateTransform(genome.FinalTransform, errors, requirePositiveWeight: false);
         if (!IsFinite(totalWeight) || totalWeight <= 0) errors.Add("The flame has no usable transform weight.");
         return errors;
     }
@@ -42,5 +33,20 @@ public static class FlameValidator
     }
 
     private static bool IsFinite(double value) => double.IsFinite(value);
+
+    private static void ValidateTransform(FlameTransform transform, ICollection<string> errors, bool requirePositiveWeight)
+    {
+        if (requirePositiveWeight && (!IsFinite(transform.Weight) || transform.Weight <= 0)) errors.Add("Transform weights must be finite and positive.");
+        if (!IsFinite(transform.A) || !IsFinite(transform.B) || !IsFinite(transform.C) || !IsFinite(transform.D) || !IsFinite(transform.E) || !IsFinite(transform.F))
+            errors.Add("Affine coefficients must be finite.");
+        if (Math.Abs(transform.A * transform.D - transform.B * transform.C) < 0.01) errors.Add("An affine transform is numerically singular.");
+        if (new[] { transform.A, transform.B, transform.C, transform.D, transform.E, transform.F }.Any(value => Math.Abs(value) > 3.5)) errors.Add("Affine coefficients exceed the safe bound.");
+        if (transform.Variations.Count == 0 || transform.Variations.All(pair => pair.Value <= 0)) errors.Add("Every transform needs a positive variation.");
+        foreach (var pair in transform.Variations)
+        {
+            if (!VariationRegistry.Names.Contains(pair.Key)) errors.Add($"Unknown variation '{pair.Key}'.");
+            if (!IsFinite(pair.Value) || pair.Value < 0 || pair.Value > 2) errors.Add($"Variation weight '{pair.Key}' is outside the safe range.");
+        }
+    }
 }
 

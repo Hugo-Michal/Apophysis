@@ -74,8 +74,3 @@ public static class PreferenceDatasetBuilder
         }
     }
 }
-
-public static class TrainingWarningPolicy
-{
-    public static bool ShouldShow(DatasetStatistics statistics, bool doNotShowAgain) => statistics.Readiness != DatasetReadinessColor.Green && !doNotShowAgain;
-}

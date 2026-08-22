@@ -100,7 +100,11 @@ and failure handling, queue bounds, finite-session completion, paired rating-fol
 behavior, undo/re-rating, source-pair preservation, tone mapping, and safe
 current-flame re-render. The serialization coverage also verifies on-disk
 UTF-8 loading, native Apophysis affine/variation attributes, quality mapping,
-and backward compatibility with the previously emitted attributes. Phase 2
+and backward compatibility with the previously emitted attributes and total-
+sample quality values. Idle UI updates no longer enumerate the workspace,
+Pause gates active CPU sampling, pair checks are scoped to each rating folder,
+failed rating moves restore the source pair, and imported final transforms are
+validated and rendered. Phase 2
 AI scoring is implemented separately after the Phase 1 manual workflow; see the Phase 2 implementation note below.
 
 ## Phase 2 implementation note

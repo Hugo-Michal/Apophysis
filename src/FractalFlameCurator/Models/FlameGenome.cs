@@ -91,10 +91,7 @@ public sealed class FlameTransform
     }
 }
 
-public sealed record AffineTransform(double A, double B, double C, double D, double E, double F)
-{
-    public static AffineTransform Identity { get; } = new(1, 0, 0, 1, 0, 0);
-}
+public sealed record AffineTransform(double A, double B, double C, double D, double E, double F);
 
 public readonly record struct RgbColor(byte R, byte G, byte B)
 {

@@ -24,6 +24,7 @@ public sealed class ContinuousAiScoringService : IAsyncDisposable
     private readonly object _gate = new();
     private readonly ConcurrentDictionary<string, PreferenceScore> _scores = new(StringComparer.OrdinalIgnoreCase);
     private readonly HashSet<string> _knownSourceIds = new(StringComparer.OrdinalIgnoreCase);
+    private readonly HashSet<string> _ratedSourceIds = new(StringComparer.OrdinalIgnoreCase);
     private readonly SemaphoreSlim _inferenceGate = new(1, 1);
     private Channel<string>? _pending;
     private CancellationTokenSource? _cancellation;
@@ -46,7 +47,6 @@ public sealed class ContinuousAiScoringService : IAsyncDisposable
     public event Action<Exception>? ScoringFailed;
     public event Action<TrainingResult>? TrainingCompleted;
 
-    public DeviceDiagnostics Diagnostics => _backend.Diagnostics;
     public IReadOnlyDictionary<string, PreferenceScore> Scores => _scores;
 
     public AiScoringStatus Status
@@ -77,7 +77,15 @@ public sealed class ContinuousAiScoringService : IAsyncDisposable
             _completed = 0;
             _total = 0;
             _pendingCount = 0;
-            lock (_knownSourceIds) _knownSourceIds.Clear();
+            lock (_knownSourceIds)
+            {
+                _knownSourceIds.Clear();
+                _ratedSourceIds.Clear();
+                foreach (var path in ratings.EnumerateRatedImagePaths())
+                {
+                    _ratedSourceIds.Add(CandidateFileNaming.GetSourceId(Path.GetFileName(path)));
+                }
+            }
             _watcher = new FileSystemWatcher(_renderedDirectory, "*.png") { NotifyFilter = NotifyFilters.FileName | NotifyFilters.Size | NotifyFilters.LastWrite, EnableRaisingEvents = true };
             _watcher.Created += RenderedFileChanged;
             _watcher.Changed += RenderedFileChanged;
@@ -164,9 +172,12 @@ public sealed class ContinuousAiScoringService : IAsyncDisposable
     public async Task RescoreExistingAsync(CancellationToken cancellationToken = default)
     {
         if (_ratings is null || string.IsNullOrWhiteSpace(_renderedDirectory)) return;
+        var ratedSourceIds = _ratings.EnumerateRatedImagePaths()
+            .Select(path => CandidateFileNaming.GetSourceId(Path.GetFileName(path)))
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
         var paths = Directory.EnumerateFiles(_renderedDirectory, "*.png", SearchOption.TopDirectoryOnly)
             .Where(SourceArchive.IsCompleteCandidate)
-            .Where(path => _ratings.FindRating(path) is null)
+            .Where(path => !ratedSourceIds.Contains(CandidateFileNaming.GetSourceId(Path.GetFileName(path))))
             .ToArray();
         if (paths.Length == 0) return;
         Interlocked.Add(ref _total, paths.Length);
@@ -216,7 +227,6 @@ public sealed class ContinuousAiScoringService : IAsyncDisposable
             {
                 await WaitIfPaused(cancellationToken);
                 await WaitForCompleteCandidateAsync(path, cancellationToken);
-                if (_ratings?.FindRating(path) is not null) continue;
                 await ScorePathsAsync([path], cancellationToken);
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { return; }
@@ -236,10 +246,10 @@ public sealed class ContinuousAiScoringService : IAsyncDisposable
             try
             {
                 foreach (var path in Directory.EnumerateFiles(_renderedDirectory, "*.png", SearchOption.TopDirectoryOnly)) EnqueueIfCandidate(path);
-                await Task.Delay(250, cancellationToken);
+                await Task.Delay(TimeSpan.FromSeconds(2), cancellationToken);
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { return; }
-            catch (DirectoryNotFoundException) { await Task.Delay(250, cancellationToken); }
+            catch (DirectoryNotFoundException) { await Task.Delay(TimeSpan.FromSeconds(2), cancellationToken); }
         }
     }
 
@@ -256,7 +266,7 @@ public sealed class ContinuousAiScoringService : IAsyncDisposable
                 var renamedPath = RenameScoredPair(score.ImagePath, score.Score, allowUnpairedImages);
                 var finalScore = score with { ImagePath = renamedPath };
                 _scores[finalScore.SourceId] = finalScore;
-                _knownSourceIds.Add(finalScore.SourceId);
+                lock (_knownSourceIds) _knownSourceIds.Add(finalScore.SourceId);
                 Interlocked.Increment(ref _completed);
                 ImageScored?.Invoke(finalScore);
             }
@@ -266,16 +276,20 @@ public sealed class ContinuousAiScoringService : IAsyncDisposable
 
     private void EnqueueIfCandidate(string path)
     {
-        if (_ratings?.FindRating(path) is not null) return;
         var sourceId = CandidateFileNaming.GetSourceId(Path.GetFileName(path));
         lock (_knownSourceIds)
         {
+            if (_ratedSourceIds.Contains(sourceId)) return;
             if (!_knownSourceIds.Add(sourceId)) return;
         }
         if (_pending?.Writer.TryWrite(path) == true)
         {
             Interlocked.Increment(ref _pendingCount);
             Interlocked.Increment(ref _total);
+        }
+        else
+        {
+            lock (_knownSourceIds) _knownSourceIds.Remove(sourceId);
         }
     }
 

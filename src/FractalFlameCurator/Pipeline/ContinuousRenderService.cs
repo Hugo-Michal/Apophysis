@@ -23,12 +23,12 @@ public sealed record ContinuousRenderStatus(
     bool IsRunning,
     bool IsPaused,
     int QueueDepth,
+    int QueueCapacity,
     int ReadyCount,
     int Completed,
     int Failed,
     int BatchLimit,
     TimeSpan Elapsed,
-    RendererStatus Renderer,
     int ActiveSamples,
     int ActiveSampleBudget);
 
@@ -38,6 +38,7 @@ public sealed class ContinuousRenderService : IAsyncDisposable
     private readonly IFlameRenderer _renderer;
     private readonly ConcurrentQueue<RenderedArtifact> _ready = new();
     private readonly object _gate = new();
+    private readonly ManualResetEventSlim _renderEnabled = new(initialState: true);
     private BoundedRenderQueue<RenderJob>? _jobs;
     private CancellationTokenSource? _cancellation;
     private Task[] _workers = [];
@@ -71,12 +72,12 @@ public sealed class ContinuousRenderService : IAsyncDisposable
                 sessionRunning,
                 !_resume.Task.IsCompleted,
                 _jobs?.Count ?? 0,
+                options?.QueueCapacity ?? 0,
                 _ready.Count,
                 Volatile.Read(ref _completed),
                 Volatile.Read(ref _failed),
                 options?.BatchLimit ?? 0,
                 _started == default ? TimeSpan.Zero : DateTime.UtcNow - _started,
-                _renderer.Status,
                 Volatile.Read(ref _activeSamples),
                 Volatile.Read(ref _activeSampleBudget));
         }
@@ -103,6 +104,7 @@ public sealed class ContinuousRenderService : IAsyncDisposable
             };
             _cancellation = new CancellationTokenSource();
             _resume = CompletedSignal();
+            _renderEnabled.Set();
             _jobs = new BoundedRenderQueue<RenderJob>(_options.QueueCapacity);
             _started = DateTime.UtcNow;
             _completed = 0;
@@ -120,10 +122,15 @@ public sealed class ContinuousRenderService : IAsyncDisposable
         {
             if (_cancellation is null) return;
             if (_resume.Task.IsCompleted) _resume = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+            _renderEnabled.Reset();
         }
     }
 
-    public void Resume() => _resume.TrySetResult(true);
+    public void Resume()
+    {
+        _renderEnabled.Set();
+        _resume.TrySetResult(true);
+    }
 
     public async Task StopAsync()
     {
@@ -132,6 +139,7 @@ public sealed class ContinuousRenderService : IAsyncDisposable
         {
             if (_cancellation is null) return;
             _cancellation.Cancel();
+            _renderEnabled.Set();
             _jobs?.Complete();
             _resume.TrySetResult(true);
             tasks = _workers.Append(_producer).Where(task => task is not null).Cast<Task>().ToArray();
@@ -149,7 +157,11 @@ public sealed class ContinuousRenderService : IAsyncDisposable
 
     public bool TryDequeueReady(out RenderedArtifact artifact) => _ready.TryDequeue(out artifact!);
 
-    public async ValueTask DisposeAsync() => await StopAsync();
+    public async ValueTask DisposeAsync()
+    {
+        await StopAsync();
+        _renderEnabled.Dispose();
+    }
 
     private async Task ProduceAsync(CancellationToken cancellationToken)
     {
@@ -186,7 +198,7 @@ public sealed class ContinuousRenderService : IAsyncDisposable
                 genome.Gamma = options.RenderSettings.Gamma;
                 genome.Brightness = options.RenderSettings.Brightness;
                 genome.Vibrancy = options.RenderSettings.Vibrancy;
-                var progress = new Progress<RenderProgress>(update =>
+                var progress = new RenderProgressReporter(_renderEnabled, cancellationToken, update =>
                 {
                     Volatile.Write(ref _activeSamples, update.CompletedSamples);
                     Volatile.Write(ref _activeSampleBudget, update.TotalSamples);
@@ -220,4 +232,13 @@ public sealed class ContinuousRenderService : IAsyncDisposable
     }
 
     private sealed record RenderJob(int Sequence, long Seed);
+
+    private sealed class RenderProgressReporter(ManualResetEventSlim renderEnabled, CancellationToken cancellationToken, Action<RenderProgress> report) : IProgress<RenderProgress>
+    {
+        public void Report(RenderProgress value)
+        {
+            renderEnabled.Wait(cancellationToken);
+            report(value);
+        }
+    }
 }

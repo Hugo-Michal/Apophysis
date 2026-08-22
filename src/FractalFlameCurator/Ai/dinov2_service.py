@@ -189,7 +189,7 @@ class Worker:
                 with self.torch.inference_mode():
                     cumulative = self.torch.sigmoid(head(features[entry["path"]])).detach().cpu().tolist()[0]
                 expected = max(1.0, min(5.0, 1.0 + sum(cumulative)))
-                values.append((entry["rating"], expected))
+                values.append((entry["rating"], expected, cumulative))
         reliable = bool(request.get("validation")) and bool(request.get("test")) and len(values) >= 4
         if not values:
             return {"OrdinalAccuracy": 0.0, "MeanAbsoluteRatingError": 0.0, "SpearmanCorrelation": 0.0, "RankCorrelation": 0.0, "CalibrationError": 0.0, "IsReliable": False, "Controls": self._control_metrics(request, head)}
@@ -199,8 +199,14 @@ class Worker:
         ordinal_accuracy = sum(a == p for a, p in zip(actual, rounded)) / len(values)
         mae = sum(abs(a - p) for a, p in zip(actual, predicted)) / len(values)
         rank = _spearman(actual, predicted)
+        calibration_errors = [
+            abs(probability - (1.0 if rating >= threshold else 0.0))
+            for rating, _, cumulative in values
+            for threshold, probability in zip(range(2, 6), cumulative)
+        ]
+        calibration_error = sum(calibration_errors) / len(calibration_errors)
         controls = self._control_metrics(request, head)
-        return {"OrdinalAccuracy": ordinal_accuracy, "MeanAbsoluteRatingError": mae, "SpearmanCorrelation": rank, "RankCorrelation": rank, "CalibrationError": mae / 4.0, "IsReliable": reliable, "Controls": controls}
+        return {"OrdinalAccuracy": ordinal_accuracy, "MeanAbsoluteRatingError": mae, "SpearmanCorrelation": rank, "RankCorrelation": rank, "CalibrationError": calibration_error, "IsReliable": reliable, "Controls": controls}
 
     def _control_metrics(self, request: dict[str, Any], head: Any) -> list[dict[str, Any]]:
         controls = []
@@ -215,15 +221,28 @@ class Worker:
 def _spearman(actual: list[float], predicted: list[float]) -> float:
     if len(actual) < 2:
         return 0.0
-    actual_rank = {value: index for index, value in enumerate(sorted(set(actual)))}
-    predicted_rank = {value: index for index, value in enumerate(sorted(set(predicted)))}
-    a = [actual_rank[value] for value in actual]
-    p = [predicted_rank[value] for value in predicted]
+    a = _average_ranks(actual)
+    p = _average_ranks(predicted)
     a_mean = sum(a) / len(a)
     p_mean = sum(p) / len(p)
     numerator = sum((x - a_mean) * (y - p_mean) for x, y in zip(a, p))
     denominator = math.sqrt(sum((x - a_mean) ** 2 for x in a) * sum((y - p_mean) ** 2 for y in p))
     return numerator / denominator if denominator else 0.0
+
+
+def _average_ranks(values: list[float]) -> list[float]:
+    ordered = sorted(range(len(values)), key=values.__getitem__)
+    ranks = [0.0] * len(values)
+    start = 0
+    while start < len(ordered):
+        end = start + 1
+        while end < len(ordered) and values[ordered[end]] == values[ordered[start]]:
+            end += 1
+        average = (start + end - 1) / 2.0
+        for index in ordered[start:end]:
+            ranks[index] = average
+        start = end
+    return ranks
 
 
 def handle(request: dict[str, Any], worker: Worker | None) -> tuple[dict[str, Any], Worker | None]:

@@ -14,6 +14,11 @@ Every agent must add the newest entry at the top whenever behavior changes.
 
 ## Current features
 
+### 2026-08-22 - Idle CPU, pause, and integrity audit
+- Change: Removed render-frame and repeated full-workspace polling from the idle UI path, changed catalog/rating lookups to indexed linear scans, slowed the AI watcher fallback scan, and made Pause stop active CPU sampling. Also preserved undo history when reusing a workspace, made rating moves roll back both files on publication failure, validated pairs within each star folder, rendered imported final transforms, retained legacy total-sample quality values, and corrected ordinal calibration/Spearman calculations.
+- Files: `src/FractalFlameCurator/MainWindow.xaml.cs`, `src/FractalFlameCurator/Pipeline`, `src/FractalFlameCurator/Storage/RatingStore.cs`, `src/FractalFlameCurator/Rendering/CpuFlameRenderer.cs`, `src/FractalFlameCurator/Generation/FlameValidator.cs`, `src/FractalFlameCurator/Serialization/FlameXmlSerializer.cs`, `src/FractalFlameCurator/Ai`, `tests/FractalFlameCurator.Tests`.
+- Notes: With the existing 2,199-image workspace initialized and rendering stopped, the final WPF build used 0.031 CPU seconds during an 8.01-second steady-state sample (about 0.03% of the 12-logical-processor machine). Workspace refresh remains event-driven; active render progress updates four times per second without disk enumeration.
+
 ### 2026-08-20 - Apophysis-compatible flame serialization
 - Change: Corrected saved `.flame` files to use declaration-free UTF-8 XML, native `coefs` affine attributes, direct variation attributes, `hue_rotation`, and Apophysis samples-per-pixel quality derived from the curator's total sample budget.
 - Files: `src/FractalFlameCurator/Serialization/FlameXmlSerializer.cs`, `tests/FractalFlameCurator.Tests/PhaseOneTests.cs`.

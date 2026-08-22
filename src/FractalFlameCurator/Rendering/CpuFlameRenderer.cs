@@ -85,31 +85,14 @@ public sealed class CpuFlameRenderer : IFlameRenderer
             }
 
             var transform = genome.Transforms[PickTransform(cumulativeWeights, random.NextDouble() * cumulativeWeights[^1])];
-            var affineX = transform.A * x + transform.B * y + transform.E;
-            var affineY = transform.C * x + transform.D * y + transform.F;
-            var outputX = 0d;
-            var outputY = 0d;
-            var variationTotal = 0d;
-            foreach (var variation in transform.Variations)
-            {
-                if (variation.Value <= 0) continue;
-                var result = ApplyVariation(variation.Key, affineX, affineY, random);
-                outputX += result.X * variation.Value;
-                outputY += result.Y * variation.Value;
-                variationTotal += variation.Value;
-            }
-            if (variationTotal <= 0 || !double.IsFinite(outputX) || !double.IsFinite(outputY))
+            if (!TryApplyTransform(transform, x, y, random, out var transformedX, out var transformedY))
             {
                 x = random.NextSigned(1);
                 y = random.NextSigned(1);
                 continue;
             }
-            x = outputX / variationTotal;
-            y = outputY / variationTotal;
-            if (transform.PostTransform is { } post)
-            {
-                (x, y) = (post.A * x + post.B * y + post.E, post.C * x + post.D * y + post.F);
-            }
+            x = transformedX;
+            y = transformedY;
             if (genome.Symmetry > 1 && random.NextBool(0.35))
             {
                 var angle = random.NextInt(0, genome.Symmetry) * Math.Tau / genome.Symmetry;
@@ -125,9 +108,13 @@ public sealed class CpuFlameRenderer : IFlameRenderer
             }
             if (i < burnIn) continue;
 
+            var plotX = x;
+            var plotY = y;
+            if (genome.FinalTransform is { } finalTransform
+                && !TryApplyTransform(finalTransform, x, y, random, out plotX, out plotY)) continue;
             var cameraAngle = genome.Rotate * Math.PI / 180;
-            var cameraX = x * Math.Cos(cameraAngle) - y * Math.Sin(cameraAngle);
-            var cameraY = x * Math.Sin(cameraAngle) + y * Math.Cos(cameraAngle);
+            var cameraX = plotX * Math.Cos(cameraAngle) - plotY * Math.Sin(cameraAngle);
+            var cameraY = plotX * Math.Sin(cameraAngle) + plotY * Math.Cos(cameraAngle);
             var viewSpan = 4d / (genome.Scale / 100d);
             var px = (int)Math.Round((cameraX - genome.CenterX) / viewSpan * internalWidth + internalWidth / 2d);
             var py = (int)Math.Round((cameraY - genome.CenterY) / viewSpan * internalHeight + internalHeight / 2d);
@@ -163,6 +150,32 @@ public sealed class CpuFlameRenderer : IFlameRenderer
         var index = Array.BinarySearch(cumulativeWeights, value);
         if (index < 0) index = ~index;
         return Math.Clamp(index, 0, cumulativeWeights.Length - 1);
+    }
+
+    private static bool TryApplyTransform(FlameTransform transform, double x, double y, DeterministicRandom random, out double outputX, out double outputY)
+    {
+        var affineX = transform.A * x + transform.B * y + transform.E;
+        var affineY = transform.C * x + transform.D * y + transform.F;
+        outputX = 0;
+        outputY = 0;
+        var variationTotal = 0d;
+        foreach (var variation in transform.Variations)
+        {
+            if (variation.Value <= 0) continue;
+            var result = ApplyVariation(variation.Key, affineX, affineY, random);
+            outputX += result.X * variation.Value;
+            outputY += result.Y * variation.Value;
+            variationTotal += variation.Value;
+        }
+        if (variationTotal <= 0 || !double.IsFinite(outputX) || !double.IsFinite(outputY)) return false;
+
+        outputX /= variationTotal;
+        outputY /= variationTotal;
+        if (transform.PostTransform is { } post)
+        {
+            (outputX, outputY) = (post.A * outputX + post.B * outputY + post.E, post.C * outputX + post.D * outputY + post.F);
+        }
+        return double.IsFinite(outputX) && double.IsFinite(outputY);
     }
 
     private static byte[] Downsample(byte[] source, int sourceWidth, int sourceHeight, int width, int height, int oversample, double filterRadius)
